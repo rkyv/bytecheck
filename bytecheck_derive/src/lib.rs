@@ -306,7 +306,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                                     .map_err(|e| EnumCheckError::InvalidTuple {
                                         variant_name: stringify!(#variant),
                                         inner: TupleStructCheckError {
-                                            field_index: #index,
+                                            field_index: #i,
                                             inner: e.into(),
                                         },
                                     })?;

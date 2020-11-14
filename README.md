@@ -4,5 +4,5 @@
 - [x] Implement for core types
 - [x] Write derive macro
 - [x] Parse repr for enums in derive macro
-- [ ] Write tests
+- [x] Write tests
 - [ ] Document

@@ -51,7 +51,6 @@ impl<T: fmt::Display> fmt::Display for CheckBufferError<T> {
 impl<T: fmt::Debug + fmt::Display> error::Error for CheckBufferError<T> {}
 
 pub fn check_buffer<'a, T: CheckBytes<C>, C: Context<T::Context>>(buf: &'a [u8], pos: usize, context: &C) -> Result<&'a T, CheckBufferError<T::Error>> {
-    println!("size: {}, pos: {}, buf len: {}", mem::size_of::<T>(), pos, buf.len());
     if pos > buf.len() || buf.len() - pos < mem::size_of::<T>() {
         Err(CheckBufferError::Overrun)
     } else {
