@@ -217,15 +217,25 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             });
             let field_wheres = quote! { #(#field_wheres)* };
 
-            let variant_tags = data.variants.iter().map(|v| {
+            let tag_variant_defs = data.variants.iter().map(|v| {
                 let variant = &v.ident;
-                // TODO: handle variant = N syntax properly
-                quote_spanned! { variant.span() => #variant }
+                if let Some((_, expr)) = &v.discriminant {
+                    quote_spanned! { variant.span() => #variant = #expr }
+                } else {
+                    quote_spanned! { variant.span() => #variant }
+                }
             });
 
-            let tag_values = data.variants.iter().enumerate().map(|(i, v)| {
-                let index = Index::from(i);
-                quote_spanned! { v.ident.span() => #index }
+            let discriminant_const_defs = data.variants.iter().map(|v| {
+                let variant = &v.ident;
+                quote! {
+                    const #variant: #repr = Tag::#variant as #repr;
+                }
+            });
+
+            let tag_variant_values = data.variants.iter().map(|v| {
+                let name = &v.ident;
+                quote_spanned! { name.span() => Discriminant::#name }
             });
 
             let variant_structs = data.variants.iter().map(|v| {
@@ -311,7 +321,13 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             quote! {
                 #[repr(#repr)]
                 enum Tag {
-                    #(#variant_tags,)*
+                    #(#tag_variant_defs,)*
+                }
+
+                struct Discriminant;
+
+                impl Discriminant {
+                    #(#discriminant_const_defs)*
                 }
 
                 #(#variant_structs)*
@@ -327,7 +343,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                     unsafe fn check_bytes<'a>(bytes: *const u8, context: &__C) -> Result<&'a Self, Self::Error> {
                         let tag = *bytes.cast::<#repr>();
                         match tag {
-                            #(#tag_values => { #check_arms },)*
+                            #(#tag_variant_values => { #check_arms },)*
                             _ => return Err(EnumCheckError::InvalidTag(tag)),
                         }
                         Ok(&*bytes.cast::<Self>())

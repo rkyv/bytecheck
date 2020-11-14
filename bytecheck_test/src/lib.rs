@@ -93,4 +93,23 @@ mod tests {
 
         check_as_bytes(&value, &());
     }
+
+    #[test]
+    fn test_explicit_enum_values() {
+        #[derive(CheckBytes)]
+        #[repr(u8)]
+        enum Test {
+            A,
+            B = 100,
+            C,
+            D = 200,
+            E,
+        }
+
+        check_as_bytes(&Test::A, &());
+        check_as_bytes(&Test::B, &());
+        check_as_bytes(&Test::C, &());
+        check_as_bytes(&Test::D, &());
+        check_as_bytes(&Test::E, &());
+    }
 }
