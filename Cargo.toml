@@ -1,4 +1,6 @@
 [workspace]
 members = [
-    "bytecheck"
+    "bytecheck",
+    "bytecheck_derive",
+    "bytecheck_test",
 ]

@@ -1,24 +1,20 @@
 [package]
-name = "bytecheck"
-version = "0.0.0"
+name = "bytecheck_test"
+version = "0.1.1"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
-description = "Derive macro for bytecheck"
+description = "Test suite for bytecheck crates"
 license = "MIT"
-documentation = "https://docs.rs/bytecheck_derive"
 repository = "https://github.com/djkoloski/bytecheck"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-bytecheck_derive = { version = "=0.0.0", path = "../bytecheck_derive" }
-memoffset = "0.6"
-
 [dev-dependencies]
-bytecheck_derive = { version = "0.0.0", path = "../bytecheck_derive" }
+bytecheck = { version = "0.0.0", path = "../bytecheck" }
 
 [features]
 default = ["std"]
 const_generics = []
 silent = []
 std = []
+
