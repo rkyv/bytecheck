@@ -130,13 +130,27 @@ impl<C> CheckBytes<C> for bool {
     }
 }
 
+#[derive(Debug)]
+pub struct CharCheckError {
+    invalid_value: u32,
+}
+
+impl fmt::Display for CharCheckError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "check failed for char: invalid value {}", self.invalid_value)
+    }
+}
+
+#[cfg(feature = "std")]
+impl error::Error for CharCheckError {}
+
 impl<C> CheckBytes<C> for char {
     type Context = ();
-    type Error = core::char::CharTryFromError;
+    type Error = CharCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &C) -> Result<&'a Self, Self::Error> {
         let value = *bytes.cast::<u32>();
-        char::try_from(value)?;
+        char::try_from(value).map_err(|_| CharCheckError { invalid_value: value })?;
         Ok(&*bytes.cast::<Self>())
     }
 }
@@ -218,6 +232,8 @@ macro_rules! impl_array {
                 Ok(&*bytes.cast::<Self>())
             }
         }
+
+        impl_array! { $($rest,)* }
     };
 }
 

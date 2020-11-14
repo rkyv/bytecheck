@@ -15,6 +15,48 @@ mod tests {
     }
 
     #[test]
+    fn test_buffer_checks() {
+        check_buffer::<u32, _>(&[0u8], 0, &()).unwrap_err();
+        check_buffer::<u32, _>(&as_bytes(&0u64)[1..], 0, &()).unwrap_err();
+    }
+
+    #[test]
+    fn test_tuples() {
+        check_as_bytes(&(42u32, true, 'x'), &());
+        check_as_bytes(&(true,), &());
+
+        unsafe {
+            // These tests assume the tuple is packed (char, bool, u32)
+            <(u32, bool, char)>::check_bytes(&[0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &())
+                .unwrap();
+            <(u32, bool, char)>::check_bytes(&[0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 42u8, 16u8, 20u8, 3u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &())
+                .unwrap();
+            <(u32, bool, char)>::check_bytes(&[0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &())
+                .unwrap_err();
+            <(u32, bool, char)>::check_bytes(&[0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &())
+                .unwrap_err();
+            <(u32, bool, char)>::check_bytes(&[0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &())
+                .unwrap();
+            <(u32, bool, char)>::check_bytes(&[0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &())
+                .unwrap_err();
+        }
+    }
+
+    #[test]
+    fn test_arrays() {
+        check_as_bytes(&[true, false, true, false], &());
+        check_as_bytes(&[false, true], &());
+
+        unsafe {
+            <[bool; 4]>::check_bytes(&[1u8, 0u8, 1u8, 0u8] as *const u8, &()).unwrap();
+            <[bool; 4]>::check_bytes(&[1u8, 2u8, 1u8, 0u8] as *const u8, &()).unwrap_err();
+            <[bool; 4]>::check_bytes(&[2u8, 0u8, 1u8, 0u8] as *const u8, &()).unwrap_err();
+            <[bool; 4]>::check_bytes(&[1u8, 0u8, 1u8, 2u8] as *const u8, &()).unwrap_err();
+            <[bool; 4]>::check_bytes(&[1u8, 0u8, 1u8, 0u8, 2u8] as *const u8, &()).unwrap();
+        }
+    }
+
+    #[test]
     fn test_unit_struct() {
         #[derive(CheckBytes)]
         struct Test;
