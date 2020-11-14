@@ -1,3 +1,5 @@
+//! Procedural macros for bytecheck.
+
 extern crate proc_macro;
 
 use proc_macro2::{
@@ -74,6 +76,7 @@ fn parse_attributes(input: &DeriveInput) -> Result<Repr, TokenStream> {
     Ok(result)
 }
 
+/// Derives `CheckBytes` for the labeled type.
 #[proc_macro_derive(CheckBytes)]
 pub fn check_bytes_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

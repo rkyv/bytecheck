@@ -1,12 +1,3 @@
-# bytecheck &emsp; [![Latest Version]][crates.io] [![License]][license path] [![requires: rustc 1.47+]][Rust 1.47]
-
-[Latest Version]: https://img.shields.io/crates/v/bytecheck.svg
-[crates.io]: https://crates.io/crates/bytecheck
-[License]: https://img.shields.io/badge/license-MIT-blue.svg
-[license path]: https://github.com/djkoloski/bytecheck/blob/master/LICENSE
-[requires: rustc 1.47+]: https://img.shields.io/badge/rustc-1.47+-lightgray.svg
-[Rust 1.47]: https://blog.rust-lang.org/2020/10/08/Rust-1.47.html
-
 bytecheck is a type validation deserialization framework for Rust.
 
 ## bytecheck in action

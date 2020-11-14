@@ -1,21 +1,24 @@
 [package]
 name = "bytecheck"
-version = "0.0.0"
+version = "0.1.0"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
 description = "Derive macro for bytecheck"
 license = "MIT"
-documentation = "https://docs.rs/bytecheck_derive"
+documentation = "https://docs.rs/bytecheck"
 repository = "https://github.com/djkoloski/bytecheck"
+keywords = ["bytecheck", "validation", "zero-copy", "no_std", "rkyv"]
+categories = ["encoding", "no-std"]
+readme = "crates-io.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytecheck_derive = { version = "=0.0.0", path = "../bytecheck_derive" }
+bytecheck_derive = { version = "=0.1.0", path = "../bytecheck_derive" }
 memoffset = "0.6"
 
 [dev-dependencies]
-bytecheck_derive = { version = "0.0.0", path = "../bytecheck_derive" }
+bytecheck_derive = { version = "0.1.0", path = "../bytecheck_derive" }
 
 [features]
 default = ["std"]
