@@ -2,25 +2,24 @@
 //!
 //! bytecheck is a type validation framework for Rust.
 //!
-//! For some types, creating an invalid value immediately results in
-//! undefined behavior. This can cause some issues when trying to validate
-//! potentially invalid bytes, as just casting the bytes to your type can
-//! technically cause errors. This makes it difficult to write validation
-//! routines, because until you're certain that the bytes represent valid
-//! values you cannot cast them.
+//! For some types, creating an invalid value immediately results in undefined
+//! behavior. This can cause some issues when trying to validate potentially
+//! invalid bytes, as just casting the bytes to your type can technically cause
+//! errors. This makes it difficult to write validation routines, because until
+//! you're certain that the bytes represent valid values you cannot cast them.
 //!
-//! bytecheck provides a framework for performing these byte-level
-//! validations and implements checks for basic types along with a derive
-//! macro to implement validation for custom structs and enums.
+//! bytecheck provides a framework for performing these byte-level validations
+//! and implements checks for basic types along with a derive macro to implement
+//! validation for custom structs and enums.
 //!
 //! ## Design
 //!
-//! There are two traits at the core of bytecheck, [`Context`](trait@Context) and
-//! [`CheckBytes`]. [`CheckBytes`] does the heavy lifting of verifying
-//! that some bytes represent a valid type, whereas [`Context`] provides
-//! any contextual information that may be needed to properly do so. For
-//! core types no context is required, but for more complex and custom
-//! types there may be context needed to properly validate bytes.
+//! There are two traits at the core of bytecheck, [`Context`](trait@Context)
+//! and [`CheckBytes`]. [`CheckBytes`] does the heavy lifting of verifying that
+//! some bytes represent a valid type, whereas [`Context`] provides any
+//! contextual information that may be needed to properly do so. For core types
+//! no context is required, but for more complex and custom types there may be
+//! context needed to properly validate bytes.
 //!
 //! ## Examples
 //!
@@ -90,8 +89,8 @@
 //!
 //! ## Features
 //!
-//! - `const_generics`: Extends the implementations of [`CheckBytes`] to
-//! to all arrays and not just arrays up to length 32.
+//! - `const_generics`: Extends the implementations of [`CheckBytes`] to all
+//! arrays and not just arrays up to length 32.
 //! - `silent`: Silently consumes nested errors in `#![no_std]` instead of
 //! printing them to stderr.
 //! - `std`: Enables standard library support.
@@ -102,16 +101,12 @@
 #![cfg_attr(feature = "const_generics", feature(const_generics))]
 #![cfg_attr(feature = "const_generics", allow(incomplete_features))]
 
-use core::{
-    convert::TryFrom,
-    fmt,
-    mem,
-};
+use core::{convert::TryFrom, fmt, mem};
 #[cfg(feature = "std")]
 use std::error;
 
-pub use memoffset::offset_of;
 pub use bytecheck_derive::CheckBytes;
+pub use memoffset::offset_of;
 
 /// A context that can provide some typed context for validating types.
 pub trait Context<T: ?Sized> {
@@ -130,20 +125,19 @@ impl<C> Context<C> for C {
 /// `CheckBytes` can be derived with [`CheckBytes`](macro@CheckBytes) or
 /// implemented manually for custom behavior.
 pub trait CheckBytes<C: Context<Self::Context>> {
-    /// The type that given contexts must be able to provide for
-    /// validation.
+    /// The type that given contexts must be able to provide for valildation.
     type Context;
 
     /// The error that may result from validating the type.
     type Error: fmt::Debug + fmt::Display;
 
-    /// Checks whether the given bytes represent a valid value within the
-    /// given context.
+    /// Checks whether the given bytes represent a valid value within the given
+    /// context.
     ///
     /// # Safety
     /// The passed pointer must be aligned and point to enough bytes to
-    /// represent the type. Instead of calling `check_bytes` directly, top
-    /// level consumers should call [`check_buffer`] which validates these
+    /// represent the type. Instead of calling `check_bytes` directly, top level
+    /// consumers should call [`check_buffer`] which validates these
     /// constraints.
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error>;
 }
@@ -151,14 +145,14 @@ pub trait CheckBytes<C: Context<Self::Context>> {
 /// An error resulting from an invalid buffer.
 #[derive(Debug)]
 pub enum CheckBufferError<T> {
-    /// The buffer does not have enough bytes to represent the given type
-    /// at the given offset.
+    /// The buffer does not have enough bytes to represent the given type at the
+    /// given offset.
     Overrun,
-    /// The address of the position in the buffer is not properly aligned
-    /// to represent the given type.
+    /// The address of the position in the buffer is not properly aligned to
+    /// represent the given type.
     Unaligned,
-    /// The buffer checks passed but there was an error validating the
-    /// bytes of the type.
+    /// The buffer checks passed but there was an error validating the bytes of
+    /// the type.
     CheckBytes(T),
 }
 
@@ -177,7 +171,11 @@ impl<T: fmt::Debug + fmt::Display> error::Error for CheckBufferError<T> {}
 
 /// Checks whether a valid value of the given type is located in the given
 /// buffer at the given position.
-pub fn check_buffer<'a, T: CheckBytes<C>, C: Context<T::Context>>(buf: &'a [u8], pos: usize, mut context: C) -> Result<&'a T, CheckBufferError<T::Error>> {
+pub fn check_buffer<'a, T: CheckBytes<C>, C: Context<T::Context>>(
+    buf: &'a [u8],
+    pos: usize,
+    mut context: C,
+) -> Result<&'a T, CheckBufferError<T::Error>> {
     if pos > buf.len() || buf.len() - pos < mem::size_of::<T>() {
         Err(CheckBufferError::Overrun)
     } else {
@@ -193,8 +191,8 @@ pub fn check_buffer<'a, T: CheckBytes<C>, C: Context<T::Context>>(buf: &'a [u8],
 
 /// An error that cannot be produced.
 ///
-/// This is used primarily for primitive types that do not have invalid
-/// values such as integers and floats.
+/// This is used primarily for primitive types that do not have invalid values
+/// such as integers and floats.
 #[derive(Debug)]
 pub enum Unreachable {}
 
@@ -213,7 +211,10 @@ macro_rules! impl_primitive {
             type Context = C;
             type Error = Unreachable;
 
-            unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
+            unsafe fn check_bytes<'a>(
+                bytes: *const u8,
+                _context: &mut C,
+            ) -> Result<&'a Self, Self::Error> {
                 Ok(&*bytes.cast::<Self>())
             }
         }
@@ -245,7 +246,11 @@ pub struct BoolCheckError {
 
 impl fmt::Display for BoolCheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "check failed for bool: expected 0 or 1, found {}", self.invalid_value)
+        write!(
+            f,
+            "check failed for bool: expected 0 or 1, found {}",
+            self.invalid_value
+        )
     }
 }
 
@@ -260,15 +265,17 @@ impl<C> CheckBytes<C> for bool {
         let byte = *bytes;
         match byte {
             0 | 1 => Ok(&*bytes.cast::<Self>()),
-            _ => Err(BoolCheckError { invalid_value: byte }),
+            _ => Err(BoolCheckError {
+                invalid_value: byte,
+            }),
         }
     }
 }
 
 /// An error resulting from an invalid character.
 ///
-/// Characters are four bytes and may only have values from `0x0` to
-// `0xD7FF` and `0xE000` to `0x10FFFF` inclusive.
+/// Characters are four bytes and may only have values from `0x0` to `0xD7FF`
+/// and `0xE000` to `0x10FFFF` inclusive.
 #[derive(Debug)]
 pub struct CharCheckError {
     /// The `u32` value of the invalid character
@@ -277,7 +284,11 @@ pub struct CharCheckError {
 
 impl fmt::Display for CharCheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "check failed for char: invalid value {}", self.invalid_value)
+        write!(
+            f,
+            "check failed for char: invalid value {}",
+            self.invalid_value
+        )
     }
 }
 
@@ -290,7 +301,9 @@ impl<C> CheckBytes<C> for char {
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
         let value = *bytes.cast::<u32>();
-        char::try_from(value).map_err(|_| CharCheckError { invalid_value: value })?;
+        char::try_from(value).map_err(|_| CharCheckError {
+            invalid_value: value,
+        })?;
         Ok(&*bytes.cast::<Self>())
     }
 }
@@ -353,7 +366,11 @@ pub struct ArrayCheckError<T> {
 
 impl<T: fmt::Display> fmt::Display for ArrayCheckError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "check failed for array index {}: {}", self.index, self.error)
+        write!(
+            f,
+            "check failed for array index {}: {}",
+            self.index, self.error
+        )
     }
 }
 
@@ -409,7 +426,11 @@ pub struct StructCheckError<T> {
 
 impl<T: fmt::Display> fmt::Display for StructCheckError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "check failed for struct member {}: {}", self.field_name, self.inner)
+        write!(
+            f,
+            "check failed for struct member {}: {}",
+            self.field_name, self.inner
+        )
     }
 }
 
@@ -427,7 +448,11 @@ pub struct TupleStructCheckError<T> {
 
 impl<T: fmt::Display> fmt::Display for TupleStructCheckError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "check failed for tuple struct member {}: {}", self.field_index, self.inner)
+        write!(
+            f,
+            "check failed for tuple struct member {}: {}",
+            self.field_index, self.inner
+        )
     }
 }
 
@@ -454,22 +479,39 @@ pub enum EnumCheckError<T, U> {
     /// The enum tag was invalid
     InvalidTag(
         /// The invalid value of the tag
-        U
+        U,
     ),
 }
 
 impl<T: fmt::Display, U: fmt::Display> fmt::Display for EnumCheckError<T, U> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EnumCheckError::InvalidStruct { variant_name, inner } => write!(f, "check failed for enum struct variant {}: {}", variant_name, inner),
-            EnumCheckError::InvalidTuple { variant_name, inner } => write!(f, "check failed for enum tuple variant {}: {}", variant_name, inner),
+            EnumCheckError::InvalidStruct {
+                variant_name,
+                inner,
+            } => write!(
+                f,
+                "check failed for enum struct variant {}: {}",
+                variant_name, inner
+            ),
+            EnumCheckError::InvalidTuple {
+                variant_name,
+                inner,
+            } => write!(
+                f,
+                "check failed for enum tuple variant {}: {}",
+                variant_name, inner
+            ),
             EnumCheckError::InvalidTag(tag) => write!(f, "invalid tag for enum: {}", tag),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display, U: fmt::Debug + fmt::Display> error::Error for EnumCheckError<T, U> {}
+impl<T: fmt::Debug + fmt::Display, U: fmt::Debug + fmt::Display> error::Error
+    for EnumCheckError<T, U>
+{
+}
 
 /// An error that consumes source errors and may log to stderr.
 pub struct ErrorSink;
@@ -492,8 +534,7 @@ impl<T: fmt::Debug> From<T> for ErrorSink {
 #[cfg(not(feature = "std"))]
 pub type DefaultError = ErrorSink;
 
-/// The default error type that must be convertible from all other error
-/// types.
+/// The default error type that must be convertible from all other error types.
 ///
 /// In `#![no_std]` builds, this defaults to [`ErrorSink`].
 #[cfg(feature = "std")]

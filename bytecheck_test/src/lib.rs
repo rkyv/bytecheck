@@ -1,13 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use bytecheck::{
-        check_buffer,
-        CheckBytes,
-        Context,
-    };
+    use bytecheck::{check_buffer, CheckBytes, Context};
 
     fn as_bytes<T>(value: &T) -> &[u8] {
-        unsafe { core::slice::from_raw_parts((value as *const T).cast::<u8>(), core::mem::size_of::<T>()) }
+        unsafe {
+            core::slice::from_raw_parts((value as *const T).cast::<u8>(), core::mem::size_of::<T>())
+        }
     }
 
     fn check_as_bytes<T: CheckBytes<C>, C: Context<T::Context>>(value: &T, context: C) {
@@ -27,18 +25,54 @@ mod tests {
 
         unsafe {
             // These tests assume the tuple is packed (char, bool, u32)
-            <(u32, bool, char)>::check_bytes(&[0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            <(u32, bool, char)>::check_bytes(&[0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 42u8, 16u8, 20u8, 3u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            <(u32, bool, char)>::check_bytes(&[0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
-            <(u32, bool, char)>::check_bytes(&[0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
-            <(u32, bool, char)>::check_bytes(&[0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            <(u32, bool, char)>::check_bytes(&[0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
+            <(u32, bool, char)>::check_bytes(
+                &[
+                    0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            <(u32, bool, char)>::check_bytes(
+                &[
+                    0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 42u8, 16u8, 20u8, 3u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            <(u32, bool, char)>::check_bytes(
+                &[
+                    0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
+            <(u32, bool, char)>::check_bytes(
+                &[
+                    0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8,
+                    255u8, 255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
+            <(u32, bool, char)>::check_bytes(
+                &[
+                    0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            <(u32, bool, char)>::check_bytes(
+                &[
+                    0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
         }
     }
 
@@ -75,18 +109,54 @@ mod tests {
 
         unsafe {
             // These tests assume the struct is packed (u32, char, bool)
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
         }
     }
 
@@ -109,18 +179,54 @@ mod tests {
 
         unsafe {
             // These tests assume the struct is packed (u32, char, bool)
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
         }
     }
 
@@ -132,22 +238,31 @@ mod tests {
             b: T,
         }
 
-        let value = Test {
-            a: 42,
-            b: true,
-        };
+        let value = Test { a: 42, b: true };
 
         check_as_bytes(&value, &mut ());
 
         unsafe {
-            Test::<bool>::check_bytes(&[0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::<bool>::check_bytes(&[12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::<bool>::check_bytes(&[0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::<bool>::check_bytes(&[0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
+            Test::<bool>::check_bytes(
+                &[0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::<bool>::check_bytes(
+                &[12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::<bool>::check_bytes(
+                &[0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::<bool>::check_bytes(
+                &[0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
         }
     }
 
@@ -170,7 +285,11 @@ mod tests {
 
         check_as_bytes(&value, &mut ());
 
-        let value = Test::B { a: 42, b: true, c: 'x' };
+        let value = Test::B {
+            a: 42,
+            b: true,
+            c: 'x',
+        };
 
         check_as_bytes(&value, &mut ());
 
@@ -179,14 +298,38 @@ mod tests {
         check_as_bytes(&value, &mut ());
 
         unsafe {
-            Test::check_bytes(&[0u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8, 0u8, 0u8, 0u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[1u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8, 0u8, 0u8, 0u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 25u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap();
-            Test::check_bytes(&[3u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 25u8, 255u8, 255u8, 255u8] as *const u8, &mut ())
-                .unwrap_err();
+            Test::check_bytes(
+                &[
+                    0u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8,
+                    0u8, 0u8, 0u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    1u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8,
+                    0u8, 0u8, 0u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 25u8, 255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap();
+            Test::check_bytes(
+                &[
+                    3u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
+                    255u8, 25u8, 255u8, 255u8, 255u8,
+                ] as *const u8,
+                &mut (),
+            )
+            .unwrap_err();
         }
     }
 
@@ -238,7 +381,11 @@ mod tests {
 
         impl fmt::Display for TestError {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "mismatched value: expected {}, found {}", self.expected, self.found)
+                write!(
+                    f,
+                    "mismatched value: expected {}, found {}",
+                    self.expected, self.found
+                )
             }
         }
 
@@ -249,23 +396,24 @@ mod tests {
             type Context = TestContext;
             type Error = TestError;
 
-            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+            unsafe fn check_bytes<'a>(
+                bytes: *const u8,
+                context: &mut C,
+            ) -> Result<&'a Self, Self::Error> {
                 let found = *i32::check_bytes(bytes, context).unwrap();
                 let expected = context.provide().0;
                 if expected == found {
                     Ok(&*bytes.cast())
                 } else {
-                    Err(TestError {
-                        expected,
-                        found,
-                    })
+                    Err(TestError { expected, found })
                 }
             }
         }
 
         unsafe {
             Test::check_bytes(&[42u8, 0u8, 0u8, 0u8] as *const u8, &mut TestContext(42)).unwrap();
-            Test::check_bytes(&[41u8, 0u8, 0u8, 0u8] as *const u8, &mut TestContext(42)).unwrap_err();
+            Test::check_bytes(&[41u8, 0u8, 0u8, 0u8] as *const u8, &mut TestContext(42))
+                .unwrap_err();
         }
     }
 }

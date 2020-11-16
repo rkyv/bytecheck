@@ -2,26 +2,11 @@
 
 extern crate proc_macro;
 
-use proc_macro2::{
-    Span,
-    TokenStream,
-};
-use quote::{
-    quote,
-    quote_spanned,
-};
+use proc_macro2::{Span, TokenStream};
+use quote::{quote, quote_spanned};
 use syn::{
-    AttrStyle,
-    Data,
-    DeriveInput,
-    Error,
-    Fields,
-    Ident,
-    Index,
-    Meta,
-    NestedMeta,
-    parse_macro_input,
-    spanned::Spanned,
+    parse_macro_input, spanned::Spanned, AttrStyle, Data, DeriveInput, Error, Fields, Ident, Index,
+    Meta, NestedMeta,
 };
 
 struct Repr {
@@ -96,7 +81,11 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
 
     let error_type = Ident::new("DefaultError", name.span());
 
-    let generic_params = input.generics.params.iter().map(|p| quote_spanned! { p.span() => #p });
+    let generic_params = input
+        .generics
+        .params
+        .iter()
+        .map(|p| quote_spanned! { p.span() => #p });
     let generic_params = quote! { #(#generic_params,)* };
 
     let generic_args = input.generics.type_params().map(|p| {
@@ -109,81 +98,79 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
         Some(ref clause) => {
             let predicates = clause.predicates.iter().map(|p| quote! { #p });
             quote! { #(#predicates,)* }
-        },
+        }
         None => quote! {},
     };
 
     let check_bytes_impl = match input.data {
-        Data::Struct(ref data) => {
-            match data.fields {
-                Fields::Named(ref fields) => {
-                    let field_wheres = fields.named.iter().map(|f| {
+        Data::Struct(ref data) => match data.fields {
+            Fields::Named(ref fields) => {
+                let field_wheres = fields.named.iter().map(|f| {
                         let ty = &f.ty;
                         quote_spanned! { ty.span() => #ty: CheckBytes<__C>, __C: Context<<#ty as CheckBytes<__C>>::Context>, <#ty as CheckBytes<__C>>::Error: Into<DefaultError>, }
                     });
 
-                    let field_checks = fields.named.iter().map(|f| {
+                let field_checks = fields.named.iter().map(|f| {
                         let field = &f.ident;
                         let ty = &f.ty;
                         quote_spanned! { ty.span() => <#ty as CheckBytes<__C>>::check_bytes(bytes.add(offset_of!(#name<#generic_args>, #field)), context).map_err(|e| StructCheckError { field_name: stringify!(#field), inner: e.into() })?; }
                     });
 
-                    quote! {
-                        impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
-                        where
-                            #generic_predicates
-                            #(#field_wheres)*
-                        {
-                            type Context = __C;
-                            type Error = StructCheckError<#error_type>;
+                quote! {
+                    impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
+                    where
+                        #generic_predicates
+                        #(#field_wheres)*
+                    {
+                        type Context = __C;
+                        type Error = StructCheckError<#error_type>;
 
-                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
-                                #(#field_checks)*
-                                Ok(&*bytes.cast::<Self>())
-                            }
+                        unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
+                            #(#field_checks)*
+                            Ok(&*bytes.cast::<Self>())
                         }
                     }
-                },
-                Fields::Unnamed(ref fields) => {
-                    let field_wheres = fields.unnamed.iter().map(|f| {
+                }
+            }
+            Fields::Unnamed(ref fields) => {
+                let field_wheres = fields.unnamed.iter().map(|f| {
                         let ty = &f.ty;
                         quote_spanned! { ty.span() => #ty: CheckBytes<__C>, __C: Context<<#ty as CheckBytes<__C>>::Context>, <#ty as CheckBytes<__C>>::Error: Into<DefaultError>, }
                     });
 
-                    let field_checks = fields.unnamed.iter().enumerate().map(|(i, f)| {
+                let field_checks = fields.unnamed.iter().enumerate().map(|(i, f)| {
                         let ty = &f.ty;
                         let index = Index::from(i);
                         quote_spanned! { ty.span() => <#ty as CheckBytes<__C>>::check_bytes(bytes.add(offset_of!(#name<#generic_args>, #index)), context).map_err(|e| TupleStructCheckError::<#error_type> { field_index: #i, inner: e.into() })?; }
                     });
 
-                    quote! {
-                        impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
-                        where
-                            #generic_predicates
-                            #(#field_wheres)*
-                        {
-                            type Context = __C;
-                            type Error = TupleStructCheckError<#error_type>;
+                quote! {
+                    impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
+                    where
+                        #generic_predicates
+                        #(#field_wheres)*
+                    {
+                        type Context = __C;
+                        type Error = TupleStructCheckError<#error_type>;
 
-                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
-                                #(#field_checks)*
-                                Ok(&*bytes.cast::<Self>())
-                            }
+                        unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
+                            #(#field_checks)*
+                            Ok(&*bytes.cast::<Self>())
                         }
                     }
-                },
-                Fields::Unit => {
-                    quote! {
-                        impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
-                        where
-                            #generic_predicates
-                        {
-                            type Context = __C;
-                            type Error = Unreachable;
+                }
+            }
+            Fields::Unit => {
+                quote! {
+                    impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
+                    where
+                        #generic_predicates
+                    {
+                        type Context = __C;
+                        type Error = Unreachable;
 
-                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
-                                Ok(&*bytes.cast::<Self>())
-                            }
+                        unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
+                            Ok(&*bytes.cast::<Self>())
                         }
                     }
                 }
@@ -191,11 +178,18 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
         },
         Data::Enum(ref data) => {
             if let Some(span) = repr.rust.or(repr.transparent).or(repr.packed).or(repr.c) {
-                return Error::new(span, "archive self enums must be repr(C) or repr(Int)").to_compile_error();
+                return Error::new(span, "archive self enums must be repr(C) or repr(Int)")
+                    .to_compile_error();
             }
 
             let repr = match repr.int {
-                None => return Error::new(input.span(), "enums implementing CheckBytes must be repr(Int)").to_compile_error(),
+                None => {
+                    return Error::new(
+                        input.span(),
+                        "enums implementing CheckBytes must be repr(Int)",
+                    )
+                    .to_compile_error()
+                }
                 Some(ref repr) => repr,
             };
 
@@ -353,8 +347,11 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                     }
                 }
             }
-        },
-        Data::Union(_) => return Error::new(input.span(), "CheckBytes cannot be derived for unions").to_compile_error(),
+        }
+        Data::Union(_) => {
+            return Error::new(input.span(), "CheckBytes cannot be derived for unions")
+                .to_compile_error()
+        }
     };
 
     quote! {
