@@ -42,7 +42,7 @@
 //!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
 //!         ] as *const u8,
-//!         &()
+//!         &mut ()
 //!     ).unwrap();
 //!
 //!     // Changing the bytes for the u32 is OK, any bytes are a valid u32
@@ -51,7 +51,7 @@
 //!             42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
 //!         ] as *const u8,
-//!         &()
+//!         &mut ()
 //!     ).unwrap();
 //!
 //!     // Characters outside the valid ranges are invalid
@@ -60,14 +60,14 @@
 //!             0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
 //!         ] as *const u8,
-//!         &()
+//!         &mut ()
 //!     ).unwrap_err();
 //!     Test::check_bytes(
 //!         &[
 //!             0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
 //!         ] as *const u8,
-//!         &()
+//!         &mut ()
 //!     ).unwrap_err();
 //!
 //!     // 0 is a valid boolean value (false) but 2 is not
@@ -76,14 +76,14 @@
 //!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
 //!             0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
 //!         ] as *const u8,
-//!         &()
+//!         &mut ()
 //!     ).unwrap();
 //!     Test::check_bytes(
 //!         &[
 //!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
 //!             2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
 //!         ] as *const u8,
-//!         &()
+//!         &mut ()
 //!     ).unwrap_err();
 //! }
 //! ```
@@ -116,12 +116,12 @@ pub use bytecheck_derive::CheckBytes;
 /// A context that can provide some typed context for validating types.
 pub trait Context<T: ?Sized> {
     /// Provides some context for validation.
-    fn provide(&self) -> &T;
+    fn provide(&mut self) -> &mut T;
 }
 
-impl<T> Context<()> for T {
-    fn provide(&self) -> &() {
-        &()
+impl<C> Context<C> for C {
+    fn provide(&mut self) -> &mut Self {
+        self
     }
 }
 
@@ -145,7 +145,7 @@ pub trait CheckBytes<C: Context<Self::Context>> {
     /// represent the type. Instead of calling `check_bytes` directly, top
     /// level consumers should call [`check_buffer`] which validates these
     /// constraints.
-    unsafe fn check_bytes<'a>(bytes: *const u8, context: &C) -> Result<&'a Self, Self::Error>;
+    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error>;
 }
 
 /// An error resulting from an invalid buffer.
@@ -177,7 +177,7 @@ impl<T: fmt::Debug + fmt::Display> error::Error for CheckBufferError<T> {}
 
 /// Checks whether a valid value of the given type is located in the given
 /// buffer at the given position.
-pub fn check_buffer<'a, T: CheckBytes<C>, C: Context<T::Context>>(buf: &'a [u8], pos: usize, context: &C) -> Result<&'a T, CheckBufferError<T::Error>> {
+pub fn check_buffer<'a, T: CheckBytes<C>, C: Context<T::Context>>(buf: &'a [u8], pos: usize, mut context: C) -> Result<&'a T, CheckBufferError<T::Error>> {
     if pos > buf.len() || buf.len() - pos < mem::size_of::<T>() {
         Err(CheckBufferError::Overrun)
     } else {
@@ -185,7 +185,7 @@ pub fn check_buffer<'a, T: CheckBytes<C>, C: Context<T::Context>>(buf: &'a [u8],
         if ptr as usize & (mem::align_of::<T>() - 1) != 0 {
             Err(CheckBufferError::Unaligned)
         } else {
-            let result = unsafe { T::check_bytes(ptr, context) };
+            let result = unsafe { T::check_bytes(ptr, &mut context) };
             Ok(result.map_err(|e| CheckBufferError::CheckBytes(e))?)
         }
     }
@@ -210,10 +210,10 @@ impl error::Error for Unreachable {}
 macro_rules! impl_primitive {
     ($type:ty) => {
         impl<C> CheckBytes<C> for $type {
-            type Context = ();
+            type Context = C;
             type Error = Unreachable;
 
-            unsafe fn check_bytes<'a>(bytes: *const u8, _context: &C) -> Result<&'a Self, Self::Error> {
+            unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
                 Ok(&*bytes.cast::<Self>())
             }
         }
@@ -253,10 +253,10 @@ impl fmt::Display for BoolCheckError {
 impl error::Error for BoolCheckError {}
 
 impl<C> CheckBytes<C> for bool {
-    type Context = ();
+    type Context = C;
     type Error = BoolCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
         let byte = *bytes;
         match byte {
             0 | 1 => Ok(&*bytes.cast::<Self>()),
@@ -285,10 +285,10 @@ impl fmt::Display for CharCheckError {
 impl error::Error for CharCheckError {}
 
 impl<C> CheckBytes<C> for char {
-    type Context = ();
+    type Context = C;
     type Error = CharCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
         let value = *bytes.cast::<u32>();
         char::try_from(value).map_err(|_| CharCheckError { invalid_value: value })?;
         Ok(&*bytes.cast::<Self>())
@@ -320,12 +320,12 @@ macro_rules! impl_tuple {
         where
             $(C: Context<$type::Context>,)+
         {
-            type Context = ();
+            type Context = C;
             type Error = $error<$($type::Error),+>;
 
             #[allow(clippy::unneeded_wildcard_pattern)]
-            unsafe fn check_bytes<'a>(bytes: *const u8, context: &C) -> Result<&'a Self, Self::Error> {
-                $($type::check_bytes(bytes.add(memoffset::offset_of_tuple!(Self, $index)), &context).map_err(|e| $error::$type(e))?;)+
+            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+                $($type::check_bytes(bytes.add(memoffset::offset_of_tuple!(Self, $index)), context).map_err(|e| $error::$type(e))?;)+
                 Ok(&*bytes.cast::<Self>())
             }
         }
@@ -365,10 +365,10 @@ macro_rules! impl_array {
     () => {};
     ($len:expr, $($rest:expr,)*) => {
         impl<T: CheckBytes<C>, C: Context<T::Context>> CheckBytes<C> for [T; $len] {
-            type Context = ();
+            type Context = C;
             type Error = ArrayCheckError<T::Error>;
 
-            unsafe fn check_bytes<'a>(bytes: *const u8, context: &C) -> Result<&'a Self, Self::Error> {
+            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
                 for index in 0..$len {
                     let el_bytes = bytes.add(index * mem::size_of::<T>());
                     T::check_bytes(el_bytes, context).map_err(|error| ArrayCheckError { index, error })?;

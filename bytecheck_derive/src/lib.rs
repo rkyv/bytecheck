@@ -134,10 +134,10 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                             #generic_predicates
                             #(#field_wheres)*
                         {
-                            type Context = ();
+                            type Context = __C;
                             type Error = StructCheckError<#error_type>;
 
-                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &__C) -> Result<&'a Self, Self::Error> {
+                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
                                 #(#field_checks)*
                                 Ok(&*bytes.cast::<Self>())
                             }
@@ -162,10 +162,10 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                             #generic_predicates
                             #(#field_wheres)*
                         {
-                            type Context = ();
+                            type Context = __C;
                             type Error = TupleStructCheckError<#error_type>;
 
-                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &__C) -> Result<&'a Self, Self::Error> {
+                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
                                 #(#field_checks)*
                                 Ok(&*bytes.cast::<Self>())
                             }
@@ -178,10 +178,10 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                         where
                             #generic_predicates
                         {
-                            type Context = ();
+                            type Context = __C;
                             type Error = Unreachable;
 
-                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &__C) -> Result<&'a Self, Self::Error> {
+                            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
                                 Ok(&*bytes.cast::<Self>())
                             }
                         }
@@ -340,10 +340,10 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                     #generic_predicates
                     #field_wheres
                 {
-                    type Context = ();
+                    type Context = __C;
                     type Error = EnumCheckError<#error_type, #repr>;
 
-                    unsafe fn check_bytes<'a>(bytes: *const u8, context: &__C) -> Result<&'a Self, Self::Error> {
+                    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
                         let tag = *bytes.cast::<#repr>();
                         match tag {
                             #(#tag_variant_values => { #check_arms },)*
