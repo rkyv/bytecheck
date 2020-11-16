@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use bytecheck::{check_buffer, CheckBytes, Context};
+    use bytecheck::{check_buffer, CheckBytes, Context, Unreachable};
 
     fn as_bytes<T>(value: &T) -> &[u8] {
         unsafe {
@@ -389,6 +389,12 @@ mod tests {
             }
         }
 
+        impl From<Unreachable> for TestError {
+            fn from(_e: Unreachable) -> Self {
+                unreachable!();
+            }
+        }
+
         #[cfg(feature = "std")]
         impl error::Error for TestError {}
 
@@ -400,7 +406,7 @@ mod tests {
                 bytes: *const u8,
                 context: &mut C,
             ) -> Result<&'a Self, Self::Error> {
-                let found = *i32::check_bytes(bytes, context).unwrap();
+                let found = *i32::check_bytes(bytes, context)?;
                 let expected = context.provide().0;
                 if expected == found {
                     Ok(&*bytes.cast())
