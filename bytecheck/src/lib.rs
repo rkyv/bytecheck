@@ -14,12 +14,9 @@
 //!
 //! ## Design
 //!
-//! There are two traits at the core of bytecheck, [`Context`](trait@Context)
-//! and [`CheckBytes`]. [`CheckBytes`] does the heavy lifting of verifying that
-//! some bytes represent a valid type, whereas [`Context`] provides any
-//! contextual information that may be needed to properly do so. For core types
-//! no context is required, but for more complex and custom types there may be
-//! context needed to properly validate bytes.
+//! [`CheckBytes`] is at the heart of bytecheck, and does the heavy lifting of
+//! verifying that some bytes represent a valid type. Implementing it can be
+//! done manually or automatically with the [derive macro](macro@CheckBytes).
 //!
 //! ## Examples
 //!
@@ -113,10 +110,9 @@ pub trait CheckBytes<C> {
     /// context.
     ///
     /// # Safety
+    ///
     /// The passed pointer must be aligned and point to enough bytes to
-    /// represent the type. Instead of calling `check_bytes` directly, top level
-    /// consumers should call [`check_buffer`] which validates these
-    /// constraints.
+    /// represent the type.
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error>;
 }
 
@@ -262,7 +258,7 @@ macro_rules! impl_tuple {
 
             #[allow(clippy::unneeded_wildcard_pattern)]
             unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
-                $($type::check_bytes(bytes.add(memoffset::offset_of_tuple!(Self, $index)), context).map_err(|e| $error::$type(e))?;)+
+                $($type::check_bytes(bytes.add(memoffset::offset_of_tuple!(Self, $index)), context).map_err($error::$type)?;)+
                 Ok(&*bytes.cast::<Self>())
             }
         }
@@ -308,6 +304,7 @@ macro_rules! impl_array {
             type Error = ArrayCheckError<T::Error>;
 
             unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+                #[allow(clippy::reversed_empty_ranges)]
                 for index in 0..$len {
                     let el_bytes = bytes.add(index * mem::size_of::<T>());
                     T::check_bytes(el_bytes, context).map_err(|error| ArrayCheckError { index, error })?;
