@@ -79,8 +79,6 @@ pub fn check_bytes_derive(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
     let name = &input.ident;
 
-    let error_type = Ident::new("DefaultError", name.span());
-
     let generic_params = input
         .generics
         .params
@@ -106,9 +104,9 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => {
                 let field_wheres = fields.named.iter().map(|f| {
-                        let ty = &f.ty;
-                        quote_spanned! { ty.span() => #ty: CheckBytes<__C>, __C: Context<<#ty as CheckBytes<__C>>::Context>, <#ty as CheckBytes<__C>>::Error: Into<DefaultError>, }
-                    });
+                    let ty = &f.ty;
+                    quote_spanned! { ty.span() => #ty: CheckBytes<__C>, }
+                });
 
                 let field_checks = fields.named.iter().map(|f| {
                         let field = &f.ident;
@@ -122,8 +120,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                         #generic_predicates
                         #(#field_wheres)*
                     {
-                        type Context = __C;
-                        type Error = StructCheckError<#error_type>;
+                        type Error = StructCheckError;
 
                         unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
                             #(#field_checks)*
@@ -134,15 +131,20 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             }
             Fields::Unnamed(ref fields) => {
                 let field_wheres = fields.unnamed.iter().map(|f| {
-                        let ty = &f.ty;
-                        quote_spanned! { ty.span() => #ty: CheckBytes<__C>, __C: Context<<#ty as CheckBytes<__C>>::Context>, <#ty as CheckBytes<__C>>::Error: Into<DefaultError>, }
-                    });
+                    let ty = &f.ty;
+                    quote_spanned! { ty.span() => #ty: CheckBytes<__C>, }
+                });
 
                 let field_checks = fields.unnamed.iter().enumerate().map(|(i, f)| {
-                        let ty = &f.ty;
-                        let index = Index::from(i);
-                        quote_spanned! { ty.span() => <#ty as CheckBytes<__C>>::check_bytes(bytes.add(offset_of!(#name<#generic_args>, #index)), context).map_err(|e| TupleStructCheckError::<#error_type> { field_index: #i, inner: e.into() })?; }
-                    });
+                    let ty = &f.ty;
+                    let index = Index::from(i);
+                    quote_spanned! { ty.span() =>
+                        <#ty as CheckBytes<__C>>::check_bytes(
+                            bytes.add(offset_of!(#name<#generic_args>, #index)),
+                            context
+                        ).map_err(|e| TupleStructCheckError { field_index: #i, inner: e.into() })?;
+                    }
+                });
 
                 quote! {
                     impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
@@ -150,8 +152,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                         #generic_predicates
                         #(#field_wheres)*
                     {
-                        type Context = __C;
-                        type Error = TupleStructCheckError<#error_type>;
+                        type Error = TupleStructCheckError;
 
                         unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
                             #(#field_checks)*
@@ -166,7 +167,6 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                     where
                         #generic_predicates
                     {
-                        type Context = __C;
                         type Error = Unreachable;
 
                         unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
@@ -193,24 +193,22 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                 Some(ref repr) => repr,
             };
 
-            let field_wheres = data.variants.iter().map(|v| {
-                match v.fields {
-                    Fields::Named(ref fields) => {
-                        let field_wheres = fields.named.iter().map(|f| {
-                            let ty = &f.ty;
-                            quote_spanned! { f.span() =>  #ty: CheckBytes<__C>, __C: Context<<#ty as CheckBytes<__C>>::Context>, <#ty as CheckBytes<__C>>::Error: Into<DefaultError> }
-                        });
-                        quote! { #(#field_wheres,)* }
-                    },
-                    Fields::Unnamed(ref fields) => {
-                        let field_wheres = fields.unnamed.iter().map(|f| {
-                            let ty = &f.ty;
-                            quote_spanned! { f.span() =>  #ty: CheckBytes<__C>, __C: Context<<#ty as CheckBytes<__C>>::Context>, <#ty as CheckBytes<__C>>::Error: Into<DefaultError> }
-                        });
-                        quote! { #(#field_wheres,)* }
-                    },
-                    Fields::Unit => quote! {},
+            let field_wheres = data.variants.iter().map(|v| match v.fields {
+                Fields::Named(ref fields) => {
+                    let field_wheres = fields.named.iter().map(|f| {
+                        let ty = &f.ty;
+                        quote_spanned! { f.span() =>  #ty: CheckBytes<__C>, }
+                    });
+                    quote! { #(#field_wheres)* }
                 }
+                Fields::Unnamed(ref fields) => {
+                    let field_wheres = fields.unnamed.iter().map(|f| {
+                        let ty = &f.ty;
+                        quote_spanned! { f.span() =>  #ty: CheckBytes<__C>, }
+                    });
+                    quote! { #(#field_wheres)* }
+                }
+                Fields::Unit => quote! {},
             });
             let field_wheres = quote! { #(#field_wheres)* };
 
@@ -282,35 +280,39 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                             let name = &f.ident;
                             let ty = &f.ty;
                             quote! {
-                                <#ty as CheckBytes<__C>>::check_bytes(bytes.add(offset_of!(#variant_name<#generic_args>, #name)), context)
-                                    .map_err(|e| EnumCheckError::InvalidStruct {
-                                        variant_name: stringify!(#variant),
-                                        inner: StructCheckError {
-                                            field_name: stringify!(#name),
-                                            inner: e.into(),
-                                        },
-                                    })?;
+                                <#ty as CheckBytes<__C>>::check_bytes(
+                                    bytes.add(offset_of!(#variant_name<#generic_args>, #name)),
+                                    context
+                                ).map_err(|e| EnumCheckError::InvalidStruct {
+                                    variant_name: stringify!(#variant),
+                                    inner: StructCheckError {
+                                        field_name: stringify!(#name),
+                                        inner: e.into(),
+                                    },
+                                })?;
                             }
                         });
                         quote_spanned! { variant.span() => #(#checks)* }
-                    },
+                    }
                     Fields::Unnamed(ref fields) => {
                         let checks = fields.unnamed.iter().enumerate().map(|(i, f)| {
                             let ty = &f.ty;
                             let index = Index::from(i + 1);
                             quote! {
-                                <#ty as CheckBytes<__C>>::check_bytes(bytes.add(offset_of!(#variant_name<#generic_args>, #index)), context)
-                                    .map_err(|e| EnumCheckError::InvalidTuple {
-                                        variant_name: stringify!(#variant),
-                                        inner: TupleStructCheckError {
-                                            field_index: #i,
-                                            inner: e.into(),
-                                        },
-                                    })?;
+                                <#ty as CheckBytes<__C>>::check_bytes(
+                                    bytes.add(offset_of!(#variant_name<#generic_args>, #index)),
+                                    context
+                                ).map_err(|e| EnumCheckError::InvalidTuple {
+                                    variant_name: stringify!(#variant),
+                                    inner: TupleStructCheckError {
+                                        field_index: #i,
+                                        inner: e.into(),
+                                    },
+                                })?;
                             }
                         });
                         quote_spanned! { name.span() => #(#checks)* }
-                    },
+                    }
                     Fields::Unit => quote_spanned! { name.span() => () },
                 }
             });
@@ -334,8 +336,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                     #generic_predicates
                     #field_wheres
                 {
-                    type Context = __C;
-                    type Error = EnumCheckError<#error_type, #repr>;
+                    type Error = EnumCheckError<#repr>;
 
                     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut __C) -> Result<&'a Self, Self::Error> {
                         let tag = *bytes.cast::<#repr>();
@@ -359,8 +360,6 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             use core::marker::PhantomData;
             use bytecheck::{
                 CheckBytes,
-                Context,
-                DefaultError,
                 EnumCheckError,
                 offset_of,
                 StructCheckError,

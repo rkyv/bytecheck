@@ -91,45 +91,23 @@
 //!
 //! - `const_generics`: Extends the implementations of [`CheckBytes`] to all
 //! arrays and not just arrays up to length 32.
-//! - `silent`: Silently consumes nested errors in `#![no_std]` instead of
-//! printing them to stderr.
-//! - `std`: Enables standard library support.
-//!
-//! By default, the `std` feature is enabled.
 
-#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "const_generics", feature(const_generics))]
 #![cfg_attr(feature = "const_generics", allow(incomplete_features))]
 
 use core::{convert::TryFrom, fmt, mem};
-#[cfg(feature = "std")]
-use std::error;
+use std::error::Error;
 
 pub use bytecheck_derive::CheckBytes;
 pub use memoffset::offset_of;
-
-/// A context that can provide some typed context for validating types.
-pub trait Context<T: ?Sized> {
-    /// Provides some context for validation.
-    fn provide(&mut self) -> &mut T;
-}
-
-impl<C> Context<C> for C {
-    fn provide(&mut self) -> &mut Self {
-        self
-    }
-}
 
 /// A type that can validate whether some bytes represent a valid value.
 ///
 /// `CheckBytes` can be derived with [`CheckBytes`](macro@CheckBytes) or
 /// implemented manually for custom behavior.
-pub trait CheckBytes<C: Context<Self::Context>> {
-    /// The type that given contexts must be able to provide for valildation.
-    type Context;
-
+pub trait CheckBytes<C> {
     /// The error that may result from validating the type.
-    type Error: fmt::Debug + fmt::Display;
+    type Error: Error + 'static;
 
     /// Checks whether the given bytes represent a valid value within the given
     /// context.
@@ -140,53 +118,6 @@ pub trait CheckBytes<C: Context<Self::Context>> {
     /// consumers should call [`check_buffer`] which validates these
     /// constraints.
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error>;
-}
-
-/// An error resulting from an invalid buffer.
-#[derive(Debug)]
-pub enum CheckBufferError<T> {
-    /// The buffer does not have enough bytes to represent the given type at the
-    /// given offset.
-    Overrun,
-    /// The address of the position in the buffer is not properly aligned to
-    /// represent the given type.
-    Unaligned,
-    /// The buffer checks passed but there was an error validating the bytes of
-    /// the type.
-    CheckBytes(T),
-}
-
-impl<T: fmt::Display> fmt::Display for CheckBufferError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Overrun => write!(f, "buffer check failed: struct overrun"),
-            Self::Unaligned => write!(f, "buffer check failed: data unaligned"),
-            Self::CheckBytes(e) => e.fmt(f),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display> error::Error for CheckBufferError<T> {}
-
-/// Checks whether a valid value of the given type is located in the given
-/// buffer at the given position.
-pub fn check_buffer<'a, T: CheckBytes<C>, C: Context<T::Context>>(
-    buf: &'a [u8],
-    pos: usize,
-    mut context: C,
-) -> Result<&'a T, CheckBufferError<T::Error>> {
-    if pos > buf.len() || buf.len() - pos < mem::size_of::<T>() {
-        Err(CheckBufferError::Overrun)
-    } else {
-        let ptr = unsafe { buf.as_ptr().add(pos) };
-        if ptr as usize & (mem::align_of::<T>() - 1) != 0 {
-            Err(CheckBufferError::Unaligned)
-        } else {
-            let result = unsafe { T::check_bytes(ptr, &mut context) };
-            Ok(result.map_err(|e| CheckBufferError::CheckBytes(e))?)
-        }
-    }
 }
 
 /// An error that cannot be produced.
@@ -202,13 +133,11 @@ impl fmt::Display for Unreachable {
     }
 }
 
-#[cfg(feature = "std")]
-impl error::Error for Unreachable {}
+impl Error for Unreachable {}
 
 macro_rules! impl_primitive {
     ($type:ty) => {
         impl<C> CheckBytes<C> for $type {
-            type Context = C;
             type Error = Unreachable;
 
             unsafe fn check_bytes<'a>(
@@ -254,11 +183,9 @@ impl fmt::Display for BoolCheckError {
     }
 }
 
-#[cfg(feature = "std")]
-impl error::Error for BoolCheckError {}
+impl Error for BoolCheckError {}
 
 impl<C> CheckBytes<C> for bool {
-    type Context = C;
     type Error = BoolCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -292,11 +219,9 @@ impl fmt::Display for CharCheckError {
     }
 }
 
-#[cfg(feature = "std")]
-impl error::Error for CharCheckError {}
+impl Error for CharCheckError {}
 
 impl<C> CheckBytes<C> for char {
-    type Context = C;
     type Error = CharCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -323,17 +248,16 @@ macro_rules! impl_tuple {
 
         impl<$($type: fmt::Display),*> fmt::Display for $error<$($type),+> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                const SIZE: usize = [$($index,)+].len();
                 match self {
-                    $($error::$type(e) => write!(f, "check failed for tuple index {}: {}", $index, e),)+
+                    $($error::$type(e) => write!(f, "check failed for {}-tuple index {}: {}", SIZE, SIZE - $index - 1, e),)+
                 }
             }
         }
 
-        impl<$($type: CheckBytes<C>,)+ C> CheckBytes<C> for ($($type,)+)
-        where
-            $(C: Context<$type::Context>,)+
-        {
-            type Context = C;
+        impl<$($type: fmt::Display + fmt::Debug),*> Error for $error<$($type),+> {}
+
+        impl<$($type: CheckBytes<C>,)+ C> CheckBytes<C> for ($($type,)+) {
             type Error = $error<$($type::Error),+>;
 
             #[allow(clippy::unneeded_wildcard_pattern)]
@@ -374,15 +298,13 @@ impl<T: fmt::Display> fmt::Display for ArrayCheckError<T> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display> error::Error for ArrayCheckError<T> {}
+impl<T: fmt::Debug + fmt::Display> Error for ArrayCheckError<T> {}
 
 #[cfg(not(feature = "const_generics"))]
 macro_rules! impl_array {
     () => {};
     ($len:expr, $($rest:expr,)*) => {
-        impl<T: CheckBytes<C>, C: Context<T::Context>> CheckBytes<C> for [T; $len] {
-            type Context = C;
+        impl<T: CheckBytes<C>, C> CheckBytes<C> for [T; $len] {
             type Error = ArrayCheckError<T::Error>;
 
             unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -402,8 +324,7 @@ macro_rules! impl_array {
 impl_array! { 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, }
 
 #[cfg(feature = "const_generics")]
-impl<T: CheckBytes<C>, C: Context<T::Context>, const N: usize> CheckBytes<C> for [T; N] {
-    type Context = ();
+impl<T: CheckBytes<C>, C, const N: usize> CheckBytes<C> for [T; N] {
     type Error = ArrayCheckError<T::Error>;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &C) -> Result<&'a Self, Self::Error> {
@@ -417,14 +338,14 @@ impl<T: CheckBytes<C>, C: Context<T::Context>, const N: usize> CheckBytes<C> for
 
 /// An error resulting from an invalid struct.
 #[derive(Debug)]
-pub struct StructCheckError<T> {
+pub struct StructCheckError {
     /// The name of the struct field that was invalid
     pub field_name: &'static str,
     /// The error that occurred while validating the field
-    pub inner: T,
+    pub inner: Box<dyn Error>,
 }
 
-impl<T: fmt::Display> fmt::Display for StructCheckError<T> {
+impl fmt::Display for StructCheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -434,19 +355,18 @@ impl<T: fmt::Display> fmt::Display for StructCheckError<T> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display> error::Error for StructCheckError<T> {}
+impl Error for StructCheckError {}
 
 /// An error resulting from an invalid tuple struct.
 #[derive(Debug)]
-pub struct TupleStructCheckError<T> {
+pub struct TupleStructCheckError {
     /// The index of the struct field that was invalid
     pub field_index: usize,
     /// The error that occurred while validating the field
-    pub inner: T,
+    pub inner: Box<dyn Error>,
 }
 
-impl<T: fmt::Display> fmt::Display for TupleStructCheckError<T> {
+impl fmt::Display for TupleStructCheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -456,34 +376,33 @@ impl<T: fmt::Display> fmt::Display for TupleStructCheckError<T> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display> error::Error for TupleStructCheckError<T> {}
+impl Error for TupleStructCheckError {}
 
 /// An error resulting from an invalid enum.
 #[derive(Debug)]
-pub enum EnumCheckError<T, U> {
+pub enum EnumCheckError<T> {
     /// A struct variant was invalid
     InvalidStruct {
         /// The name of the variant that was invalid
         variant_name: &'static str,
         /// The error that occurred while validating the variant
-        inner: StructCheckError<T>,
+        inner: StructCheckError,
     },
     /// A tuple variant was invalid
     InvalidTuple {
         /// The name of the variant that was invalid
         variant_name: &'static str,
         /// The error that occurred while validating the variant
-        inner: TupleStructCheckError<T>,
+        inner: TupleStructCheckError,
     },
     /// The enum tag was invalid
     InvalidTag(
         /// The invalid value of the tag
-        U,
+        T,
     ),
 }
 
-impl<T: fmt::Display, U: fmt::Display> fmt::Display for EnumCheckError<T, U> {
+impl<T: fmt::Display> fmt::Display for EnumCheckError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EnumCheckError::InvalidStruct {
@@ -507,35 +426,4 @@ impl<T: fmt::Display, U: fmt::Display> fmt::Display for EnumCheckError<T, U> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display, U: fmt::Debug + fmt::Display> error::Error
-    for EnumCheckError<T, U>
-{
-}
-
-/// An error that consumes source errors and may log to stderr.
-pub struct ErrorSink;
-
-#[cfg(not(feature = "silent"))]
-impl<T: fmt::Debug> From<T> for ErrorSink {
-    fn from(error: T) -> Self {
-        eprintln!("error: {:?}", error);
-        Self
-    }
-}
-
-#[cfg(feature = "silent")]
-impl<T: fmt::Debug> From<T> for ErrorSink {
-    fn from(error: T) -> Self {
-        Self
-    }
-}
-
-#[cfg(not(feature = "std"))]
-pub type DefaultError = ErrorSink;
-
-/// The default error type that must be convertible from all other error types.
-///
-/// In `#![no_std]` builds, this defaults to [`ErrorSink`].
-#[cfg(feature = "std")]
-pub type DefaultError = Box<dyn std::error::Error>;
+impl<T: fmt::Debug + fmt::Display> Error for EnumCheckError<T> {}

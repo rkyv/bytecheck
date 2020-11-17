@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use bytecheck::{check_buffer, CheckBytes, Context, Unreachable};
+    use bytecheck::{CheckBytes, Unreachable};
 
     fn as_bytes<T>(value: &T) -> &[u8] {
         unsafe {
@@ -8,14 +8,8 @@ mod tests {
         }
     }
 
-    fn check_as_bytes<T: CheckBytes<C>, C: Context<T::Context>>(value: &T, context: C) {
-        check_buffer::<T, C>(as_bytes(value), 0, context).unwrap();
-    }
-
-    #[test]
-    fn test_buffer_checks() {
-        check_buffer::<u32, _>(&[0u8], 0, &mut ()).unwrap_err();
-        check_buffer::<u32, _>(&as_bytes(&0u64)[1..], 0, &mut ()).unwrap_err();
+    fn check_as_bytes<T: CheckBytes<C>, C>(value: &T, mut context: C) {
+        unsafe { T::check_bytes(as_bytes(value).as_ptr(), &mut context).unwrap() };
     }
 
     #[test]
@@ -389,25 +383,24 @@ mod tests {
             }
         }
 
+        #[cfg(feature = "std")]
+        impl error::Error for TestError {}
+
         impl From<Unreachable> for TestError {
-            fn from(_e: Unreachable) -> Self {
+            fn from(_: Unreachable) -> Self {
                 unreachable!();
             }
         }
 
-        #[cfg(feature = "std")]
-        impl error::Error for TestError {}
-
-        impl<C: Context<TestContext>> CheckBytes<C> for Test {
-            type Context = TestContext;
+        impl CheckBytes<TestContext> for Test {
             type Error = TestError;
 
             unsafe fn check_bytes<'a>(
                 bytes: *const u8,
-                context: &mut C,
+                context: &mut TestContext,
             ) -> Result<&'a Self, Self::Error> {
                 let found = *i32::check_bytes(bytes, context)?;
-                let expected = context.provide().0;
+                let expected = context.0;
                 if expected == found {
                     Ok(&*bytes.cast())
                 } else {
@@ -419,6 +412,17 @@ mod tests {
         unsafe {
             Test::check_bytes(&[42u8, 0u8, 0u8, 0u8] as *const u8, &mut TestContext(42)).unwrap();
             Test::check_bytes(&[41u8, 0u8, 0u8, 0u8] as *const u8, &mut TestContext(42))
+                .unwrap_err();
+        }
+
+        #[repr(transparent)]
+        #[derive(CheckBytes, Debug)]
+        struct TestContainer(Test);
+
+        unsafe {
+            TestContainer::check_bytes(&[42u8, 0u8, 0u8, 0u8] as *const u8, &mut TestContext(42))
+                .unwrap();
+            TestContainer::check_bytes(&[41u8, 0u8, 0u8, 0u8] as *const u8, &mut TestContext(42))
                 .unwrap_err();
         }
     }
