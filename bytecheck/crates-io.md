@@ -1,4 +1,4 @@
-bytecheck is a type validation deserialization framework for Rust.
+bytecheck is a type validation framework for Rust.
 
 ## bytecheck in action
 

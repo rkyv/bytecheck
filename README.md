@@ -7,7 +7,7 @@
 [requires: rustc 1.47+]: https://img.shields.io/badge/rustc-1.47+-lightgray.svg
 [Rust 1.47]: https://blog.rust-lang.org/2020/10/08/Rust-1.47.html
 
-bytecheck is a type validation deserialization framework for Rust.
+bytecheck is a type validation framework for Rust.
 
 ## bytecheck in action
 

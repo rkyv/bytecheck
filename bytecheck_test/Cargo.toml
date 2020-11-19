@@ -1,6 +1,6 @@
 [package]
 name = "bytecheck_test"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
 description = "Test suite for bytecheck crates"
@@ -10,7 +10,7 @@ repository = "https://github.com/djkoloski/bytecheck"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-bytecheck = { version = "0.1.0", path = "../bytecheck" }
+bytecheck = { version = "0.2.0", path = "../bytecheck" }
 
 [features]
 default = ["std"]
