@@ -224,6 +224,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             let discriminant_const_defs = data.variants.iter().map(|v| {
                 let variant = &v.ident;
                 quote! {
+                    #[allow(non_upper_case_globals)]
                     const #variant: #repr = Tag::#variant as #repr;
                 }
             });

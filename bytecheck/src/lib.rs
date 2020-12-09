@@ -92,7 +92,15 @@
 #![cfg_attr(feature = "const_generics", feature(const_generics))]
 #![cfg_attr(feature = "const_generics", allow(incomplete_features))]
 
-use core::{convert::TryFrom, fmt, mem};
+use core::num::{
+    NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroU128, NonZeroU16,
+    NonZeroU32, NonZeroU64, NonZeroU8,
+};
+use core::sync::atomic::{
+    AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64,
+    AtomicU8,
+};
+use core::{convert::TryFrom, fmt, mem, ops};
 use std::error::Error;
 
 pub use bytecheck_derive::CheckBytes;
@@ -159,6 +167,14 @@ impl_primitive!(u64);
 impl_primitive!(u128);
 impl_primitive!(f32);
 impl_primitive!(f64);
+impl_primitive!(AtomicI8);
+impl_primitive!(AtomicI16);
+impl_primitive!(AtomicI32);
+impl_primitive!(AtomicI64);
+impl_primitive!(AtomicU8);
+impl_primitive!(AtomicU16);
+impl_primitive!(AtomicU32);
+impl_primitive!(AtomicU64);
 
 /// An error resulting from an invalid boolean.
 ///
@@ -182,6 +198,20 @@ impl fmt::Display for BoolCheckError {
 impl Error for BoolCheckError {}
 
 impl<C> CheckBytes<C> for bool {
+    type Error = BoolCheckError;
+
+    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
+        let byte = *bytes;
+        match byte {
+            0 | 1 => Ok(&*bytes.cast::<Self>()),
+            _ => Err(BoolCheckError {
+                invalid_value: byte,
+            }),
+        }
+    }
+}
+
+impl<C> CheckBytes<C> for AtomicBool {
     type Error = BoolCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -324,7 +354,7 @@ impl_array! { 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15
 impl<T: CheckBytes<C>, C, const N: usize> CheckBytes<C> for [T; N] {
     type Error = ArrayCheckError<T::Error>;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, context: &C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
         for index in 0..N {
             let el_bytes = bytes.add(index * mem::size_of::<T>());
             T::check_bytes(el_bytes, context).map_err(|error| ArrayCheckError { index, error })?;
@@ -424,3 +454,126 @@ impl<T: fmt::Display> fmt::Display for EnumCheckError<T> {
 }
 
 impl<T: fmt::Debug + fmt::Display> Error for EnumCheckError<T> {}
+
+// Range types
+impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::Range<T> {
+    type Error = StructCheckError;
+
+    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+        T::check_bytes(bytes.add(offset_of!(Self, start)), context).map_err(|error| {
+            StructCheckError {
+                field_name: "start",
+                inner: Box::new(error),
+            }
+        })?;
+        T::check_bytes(bytes.add(offset_of!(Self, end)), context).map_err(|error| {
+            StructCheckError {
+                field_name: "end",
+                inner: Box::new(error),
+            }
+        })?;
+        Ok(&*bytes.cast())
+    }
+}
+
+impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeFrom<T> {
+    type Error = StructCheckError;
+
+    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+        T::check_bytes(bytes.add(offset_of!(Self, start)), context).map_err(|error| {
+            StructCheckError {
+                field_name: "start",
+                inner: Box::new(error),
+            }
+        })?;
+        Ok(&*bytes.cast())
+    }
+}
+
+impl<C> CheckBytes<C> for ops::RangeFull {
+    type Error = Unreachable;
+
+    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
+        Ok(&*bytes.cast())
+    }
+}
+
+impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeTo<T> {
+    type Error = StructCheckError;
+
+    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+        T::check_bytes(bytes.add(offset_of!(Self, end)), context).map_err(|error| {
+            StructCheckError {
+                field_name: "end",
+                inner: Box::new(error),
+            }
+        })?;
+        Ok(&*bytes.cast())
+    }
+}
+
+impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeToInclusive<T> {
+    type Error = StructCheckError;
+
+    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+        T::check_bytes(bytes.add(offset_of!(Self, end)), context).map_err(|error| {
+            StructCheckError {
+                field_name: "end",
+                inner: Box::new(error),
+            }
+        })?;
+        Ok(&*bytes.cast())
+    }
+}
+
+#[derive(Debug)]
+pub enum NonZeroCheckError {
+    IsZero,
+}
+
+impl From<Unreachable> for NonZeroCheckError {
+    fn from(_: Unreachable) -> Self {
+        unreachable!();
+    }
+}
+
+impl fmt::Display for NonZeroCheckError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NonZeroCheckError::IsZero => write!(f, "nonzero integer is zero"),
+        }
+    }
+}
+
+impl Error for NonZeroCheckError {}
+
+macro_rules! impl_nonzero {
+    ($nonzero:ident, $underlying:ident) => {
+        impl<C> CheckBytes<C> for $nonzero {
+            type Error = NonZeroCheckError;
+
+            unsafe fn check_bytes<'a>(
+                bytes: *const u8,
+                context: &mut C,
+            ) -> Result<&'a Self, Self::Error> {
+                let value = *$underlying::check_bytes(bytes, context)?;
+                if value == 0 {
+                    Err(NonZeroCheckError::IsZero)
+                } else {
+                    Ok(&*bytes.cast())
+                }
+            }
+        }
+    };
+}
+
+impl_nonzero!(NonZeroI8, i8);
+impl_nonzero!(NonZeroI16, i16);
+impl_nonzero!(NonZeroI32, i32);
+impl_nonzero!(NonZeroI64, i64);
+impl_nonzero!(NonZeroI128, i128);
+impl_nonzero!(NonZeroU8, u8);
+impl_nonzero!(NonZeroU16, u16);
+impl_nonzero!(NonZeroU32, u32);
+impl_nonzero!(NonZeroU64, u64);
+impl_nonzero!(NonZeroU128, u128);
