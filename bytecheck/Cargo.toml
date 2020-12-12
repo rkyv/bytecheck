@@ -1,6 +1,6 @@
 [package]
 name = "bytecheck"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
 description = "Derive macro for bytecheck"
@@ -14,11 +14,11 @@ readme = "crates-io.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytecheck_derive = { version = "=0.2.0", path = "../bytecheck_derive" }
+bytecheck_derive = { version = "=0.2.1", path = "../bytecheck_derive" }
 memoffset = "0.6"
 
 [dev-dependencies]
-bytecheck_derive = { version = "0.2.0", path = "../bytecheck_derive" }
+bytecheck_derive = { version = "0.2.1", path = "../bytecheck_derive" }
 
 [features]
 default = []
