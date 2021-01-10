@@ -18,10 +18,10 @@ mod tests {
         check_as_bytes(&(true,), &mut ());
 
         unsafe {
-            // These tests assume the tuple is packed (char, bool, u32)
+            // These tests assume the tuple is packed (u32, bool, char)
             <(u32, bool, char)>::check_bytes(
                 &[
-                    0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8,
+                    0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
                 ] as *const u8,
                 &mut (),
@@ -29,7 +29,7 @@ mod tests {
             .unwrap();
             <(u32, bool, char)>::check_bytes(
                 &[
-                    0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 42u8, 16u8, 20u8, 3u8, 255u8,
+                    42u8, 16u8, 20u8, 3u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
                 ] as *const u8,
                 &mut (),
@@ -37,7 +37,7 @@ mod tests {
             .unwrap();
             <(u32, bool, char)>::check_bytes(
                 &[
-                    0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8,
+                    0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0xd8u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
                 ] as *const u8,
                 &mut (),
@@ -45,7 +45,7 @@ mod tests {
             .unwrap_err();
             <(u32, bool, char)>::check_bytes(
                 &[
-                    0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8,
+                    0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0x00u8, 0x11u8, 0u8,
                     255u8, 255u8, 255u8, 255u8,
                 ] as *const u8,
                 &mut (),
@@ -53,7 +53,7 @@ mod tests {
             .unwrap_err();
             <(u32, bool, char)>::check_bytes(
                 &[
-                    0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8,
+                    0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
                 ] as *const u8,
                 &mut (),
@@ -61,7 +61,7 @@ mod tests {
             .unwrap();
             <(u32, bool, char)>::check_bytes(
                 &[
-                    0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0u8, 0u8, 0u8, 0u8, 255u8,
+                    0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
                 ] as *const u8,
                 &mut (),

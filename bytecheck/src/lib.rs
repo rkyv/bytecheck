@@ -288,7 +288,8 @@ macro_rules! impl_tuple {
 
             #[allow(clippy::unneeded_wildcard_pattern)]
             unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
-                $($type::check_bytes(bytes.add(memoffset::offset_of_tuple!(Self, $index)), context).map_err($error::$type)?;)+
+                let field_bytes = ($(bytes.add(memoffset::offset_of_tuple!(Self, $index)),)+);
+                $($type::check_bytes(field_bytes.$index, context).map_err($error::$type)?;)+
                 Ok(&*bytes.cast::<Self>())
             }
         }
