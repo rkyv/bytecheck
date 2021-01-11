@@ -358,7 +358,6 @@ mod tests {
     #[test]
     fn test_context() {
         use core::fmt;
-        #[cfg(feature = "std")]
         use std::error;
 
         #[derive(Debug)]
@@ -383,7 +382,6 @@ mod tests {
             }
         }
 
-        #[cfg(feature = "std")]
         impl error::Error for TestError {}
 
         impl From<Unreachable> for TestError {

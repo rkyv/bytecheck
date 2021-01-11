@@ -13,8 +13,5 @@ repository = "https://github.com/djkoloski/bytecheck"
 bytecheck = { version = "0.2.1", path = "../bytecheck" }
 
 [features]
-default = ["std"]
+default = []
 const_generics = []
-silent = []
-std = []
-

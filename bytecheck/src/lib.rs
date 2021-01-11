@@ -527,8 +527,10 @@ impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeToInclusive<T> {
     }
 }
 
+/// An error resulting from an invalid `NonZero` integer.
 #[derive(Debug)]
 pub enum NonZeroCheckError {
+    /// The integer was zero
     IsZero,
 }
 
