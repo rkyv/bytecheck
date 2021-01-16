@@ -110,7 +110,7 @@ pub use memoffset::offset_of;
 ///
 /// `CheckBytes` can be derived with [`CheckBytes`](macro@CheckBytes) or
 /// implemented manually for custom behavior.
-pub trait CheckBytes<C> {
+pub trait CheckBytes<C: ?Sized> {
     /// The error that may result from validating the type.
     type Error: Error + 'static;
 
@@ -141,7 +141,7 @@ impl Error for Unreachable {}
 
 macro_rules! impl_primitive {
     ($type:ty) => {
-        impl<C> CheckBytes<C> for $type {
+        impl<C: ?Sized> CheckBytes<C> for $type {
             type Error = Unreachable;
 
             unsafe fn check_bytes<'a>(
@@ -197,7 +197,7 @@ impl fmt::Display for BoolCheckError {
 
 impl Error for BoolCheckError {}
 
-impl<C> CheckBytes<C> for bool {
+impl<C: ?Sized> CheckBytes<C> for bool {
     type Error = BoolCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -211,7 +211,7 @@ impl<C> CheckBytes<C> for bool {
     }
 }
 
-impl<C> CheckBytes<C> for AtomicBool {
+impl<C: ?Sized> CheckBytes<C> for AtomicBool {
     type Error = BoolCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -247,7 +247,7 @@ impl fmt::Display for CharCheckError {
 
 impl Error for CharCheckError {}
 
-impl<C> CheckBytes<C> for char {
+impl<C: ?Sized> CheckBytes<C> for char {
     type Error = CharCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -283,7 +283,7 @@ macro_rules! impl_tuple {
 
         impl<$($type: fmt::Display + fmt::Debug),*> Error for $error<$($type),+> {}
 
-        impl<$($type: CheckBytes<C>,)+ C> CheckBytes<C> for ($($type,)+) {
+        impl<$($type: CheckBytes<C>,)+ C: ?Sized> CheckBytes<C> for ($($type,)+) {
             type Error = $error<$($type::Error),+>;
 
             #[allow(clippy::unneeded_wildcard_pattern)]
@@ -331,7 +331,7 @@ impl<T: fmt::Debug + fmt::Display> Error for ArrayCheckError<T> {}
 macro_rules! impl_array {
     () => {};
     ($len:expr, $($rest:expr,)*) => {
-        impl<T: CheckBytes<C>, C> CheckBytes<C> for [T; $len] {
+        impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T; $len] {
             type Error = ArrayCheckError<T::Error>;
 
             unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -352,7 +352,7 @@ macro_rules! impl_array {
 impl_array! { 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, }
 
 #[cfg(feature = "const_generics")]
-impl<T: CheckBytes<C>, C, const N: usize> CheckBytes<C> for [T; N] {
+impl<T: CheckBytes<C>, C: ?Sized, const N: usize> CheckBytes<C> for [T; N] {
     type Error = ArrayCheckError<T::Error>;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -457,7 +457,7 @@ impl<T: fmt::Display> fmt::Display for EnumCheckError<T> {
 impl<T: fmt::Debug + fmt::Display> Error for EnumCheckError<T> {}
 
 // Range types
-impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::Range<T> {
+impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
     type Error = StructCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -477,7 +477,7 @@ impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::Range<T> {
     }
 }
 
-impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeFrom<T> {
+impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
     type Error = StructCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -491,7 +491,7 @@ impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeFrom<T> {
     }
 }
 
-impl<C> CheckBytes<C> for ops::RangeFull {
+impl<C: ?Sized> CheckBytes<C> for ops::RangeFull {
     type Error = Unreachable;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -499,7 +499,7 @@ impl<C> CheckBytes<C> for ops::RangeFull {
     }
 }
 
-impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeTo<T> {
+impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeTo<T> {
     type Error = StructCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -513,7 +513,7 @@ impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeTo<T> {
     }
 }
 
-impl<T: CheckBytes<C>, C> CheckBytes<C> for ops::RangeToInclusive<T> {
+impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeToInclusive<T> {
     type Error = StructCheckError;
 
     unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
@@ -552,7 +552,7 @@ impl Error for NonZeroCheckError {}
 
 macro_rules! impl_nonzero {
     ($nonzero:ident, $underlying:ident) => {
-        impl<C> CheckBytes<C> for $nonzero {
+        impl<C: ?Sized> CheckBytes<C> for $nonzero {
             type Error = NonZeroCheckError;
 
             unsafe fn check_bytes<'a>(
