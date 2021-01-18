@@ -115,7 +115,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                     });
 
                 quote! {
-                    impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
+                    impl<__C: ?Sized, #generic_params> CheckBytes<__C> for #name<#generic_args>
                     where
                         #generic_predicates
                         #(#field_wheres)*
@@ -147,7 +147,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                 });
 
                 quote! {
-                    impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
+                    impl<__C: ?Sized, #generic_params> CheckBytes<__C> for #name<#generic_args>
                     where
                         #generic_predicates
                         #(#field_wheres)*
@@ -163,7 +163,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             }
             Fields::Unit => {
                 quote! {
-                    impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
+                    impl<__C: ?Sized, #generic_params> CheckBytes<__C> for #name<#generic_args>
                     where
                         #generic_predicates
                     {
@@ -332,7 +332,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
 
                 #(#variant_structs)*
 
-                impl<__C, #generic_params> CheckBytes<__C> for #name<#generic_args>
+                impl<__C: ?Sized, #generic_params> CheckBytes<__C> for #name<#generic_args>
                 where
                     #generic_predicates
                     #field_wheres

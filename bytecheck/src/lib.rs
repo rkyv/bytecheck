@@ -101,6 +101,7 @@ use core::sync::atomic::{
     AtomicU8,
 };
 use core::{convert::TryFrom, fmt, mem, ops};
+use core::marker::{PhantomData, PhantomPinned};
 use std::error::Error;
 
 pub use bytecheck_derive::CheckBytes;
@@ -175,6 +176,28 @@ impl_primitive!(AtomicU8);
 impl_primitive!(AtomicU16);
 impl_primitive!(AtomicU32);
 impl_primitive!(AtomicU64);
+
+impl<T: ?Sized, C: ?Sized> CheckBytes<C> for PhantomData<T> {
+    type Error = Unreachable;
+
+    unsafe fn check_bytes<'a>(
+        _bytes: *const u8,
+        _context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
+        Ok(&PhantomData)
+    }
+}
+
+impl<C: ?Sized> CheckBytes<C> for PhantomPinned {
+    type Error = Unreachable;
+
+    unsafe fn check_bytes<'a>(
+        _bytes: *const u8,
+        _context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
+        Ok(&PhantomPinned)
+    }
+}
 
 /// An error resulting from an invalid boolean.
 ///
