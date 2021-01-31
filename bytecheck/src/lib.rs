@@ -34,51 +34,51 @@
 //! unsafe {
 //!     // These are valid bytes for (0, 'x', true)
 //!     Test::check_bytes(
-//!         &[
+//!         (&[
 //!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
-//!         ] as *const u8,
+//!         ] as *const u8).cast(),
 //!         &mut ()
 //!     ).unwrap();
 //!
 //!     // Changing the bytes for the u32 is OK, any bytes are a valid u32
 //!     Test::check_bytes(
-//!         &[
+//!         (&[
 //!             42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
-//!         ] as *const u8,
+//!         ] as *const u8).cast(),
 //!         &mut ()
 //!     ).unwrap();
 //!
 //!     // Characters outside the valid ranges are invalid
 //!     Test::check_bytes(
-//!         &[
+//!         (&[
 //!             0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
-//!         ] as *const u8,
+//!         ] as *const u8).cast(),
 //!         &mut ()
 //!     ).unwrap_err();
 //!     Test::check_bytes(
-//!         &[
+//!         (&[
 //!             0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
-//!         ] as *const u8,
+//!         ] as *const u8).cast(),
 //!         &mut ()
 //!     ).unwrap_err();
 //!
 //!     // 0 is a valid boolean value (false) but 2 is not
 //!     Test::check_bytes(
-//!         &[
+//!         (&[
 //!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
 //!             0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
-//!         ] as *const u8,
+//!         ] as *const u8).cast(),
 //!         &mut ()
 //!     ).unwrap();
 //!     Test::check_bytes(
-//!         &[
+//!         (&[
 //!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
 //!             2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
-//!         ] as *const u8,
+//!         ] as *const u8).cast(),
 //!         &mut ()
 //!     ).unwrap_err();
 //! }
@@ -92,37 +92,55 @@
 #![cfg_attr(feature = "const_generics", feature(const_generics))]
 #![cfg_attr(feature = "const_generics", allow(incomplete_features))]
 
-use core::num::{
-    NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroU128, NonZeroU16,
-    NonZeroU32, NonZeroU64, NonZeroU8,
+use core::{
+    alloc::{Layout, LayoutErr},
+    convert::TryFrom,
+    fmt,
+    marker::{PhantomData, PhantomPinned},
+    mem,
+    num::{
+        NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroU128, NonZeroU16,
+        NonZeroU32, NonZeroU64, NonZeroU8,
+    },
+    ops,
+    slice,
+    str::{from_utf8, Utf8Error},
+    sync::atomic::{
+        AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64,
+        AtomicU8,
+    },
 };
-use core::sync::atomic::{
-    AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64,
-    AtomicU8,
-};
-use core::{convert::TryFrom, fmt, mem, ops};
-use core::marker::{PhantomData, PhantomPinned};
 use std::error::Error;
 
 pub use bytecheck_derive::CheckBytes;
 pub use memoffset::offset_of;
 
-/// A type that can validate whether some bytes represent a valid value.
+/// A type that can check whether a pointer points to a valid value.
 ///
-/// `CheckBytes` can be derived with [`CheckBytes`](macro@CheckBytes) or
-/// implemented manually for custom behavior.
+/// `Check` can be derived with [`Check`](macro@Check) or implemented manually
+/// for custom behavior.
 pub trait CheckBytes<C: ?Sized> {
-    /// The error that may result from validating the type.
+    /// The error that may result from checking the type.
     type Error: Error + 'static;
 
-    /// Checks whether the given bytes represent a valid value within the given
-    /// context.
+    /// Checks whether the given pointer points to a valid value within the
+    /// given context.
     ///
     /// # Safety
     ///
     /// The passed pointer must be aligned and point to enough bytes to
     /// represent the type.
-    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error>;
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error>;
+}
+
+pub trait CheckLayout<C: ?Sized>: CheckBytes<C> {
+    fn layout(value: *const Self, context: &mut C) -> Result<Layout, Self::Error>;
+}
+
+impl<T: CheckBytes<C>, C: ?Sized> CheckLayout<C> for T {
+    fn layout(_: *const Self, _: &mut C) -> Result<Layout, Self::Error> {
+        Ok(Layout::new::<Self>())
+    }
 }
 
 /// An error that cannot be produced.
@@ -145,11 +163,8 @@ macro_rules! impl_primitive {
         impl<C: ?Sized> CheckBytes<C> for $type {
             type Error = Unreachable;
 
-            unsafe fn check_bytes<'a>(
-                bytes: *const u8,
-                _context: &mut C,
-            ) -> Result<&'a Self, Self::Error> {
-                Ok(&*bytes.cast::<Self>())
+            unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+                Ok(&*value)
             }
         }
     };
@@ -181,10 +196,10 @@ impl<T: ?Sized, C: ?Sized> CheckBytes<C> for PhantomData<T> {
     type Error = Unreachable;
 
     unsafe fn check_bytes<'a>(
-        _bytes: *const u8,
-        _context: &mut C,
+        value: *const Self,
+        _: &mut C,
     ) -> Result<&'a Self, Self::Error> {
-        Ok(&PhantomData)
+        Ok(&*value)
     }
 }
 
@@ -192,10 +207,10 @@ impl<C: ?Sized> CheckBytes<C> for PhantomPinned {
     type Error = Unreachable;
 
     unsafe fn check_bytes<'a>(
-        _bytes: *const u8,
-        _context: &mut C,
+        value: *const Self,
+        _: &mut C,
     ) -> Result<&'a Self, Self::Error> {
-        Ok(&PhantomPinned)
+        Ok(&*value)
     }
 }
 
@@ -223,10 +238,10 @@ impl Error for BoolCheckError {}
 impl<C: ?Sized> CheckBytes<C> for bool {
     type Error = BoolCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
-        let byte = *bytes;
+    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+        let byte = *value.cast::<u8>();
         match byte {
-            0 | 1 => Ok(&*bytes.cast::<Self>()),
+            0 | 1 => Ok(&*value),
             _ => Err(BoolCheckError {
                 invalid_value: byte,
             }),
@@ -237,10 +252,10 @@ impl<C: ?Sized> CheckBytes<C> for bool {
 impl<C: ?Sized> CheckBytes<C> for AtomicBool {
     type Error = BoolCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
-        let byte = *bytes;
+    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+        let byte = *value.cast::<u8>();
         match byte {
-            0 | 1 => Ok(&*bytes.cast::<Self>()),
+            0 | 1 => Ok(&*value),
             _ => Err(BoolCheckError {
                 invalid_value: byte,
             }),
@@ -273,12 +288,12 @@ impl Error for CharCheckError {}
 impl<C: ?Sized> CheckBytes<C> for char {
     type Error = CharCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
-        let value = *bytes.cast::<u32>();
-        char::try_from(value).map_err(|_| CharCheckError {
-            invalid_value: value,
+    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+        let c = *value.cast::<u32>();
+        char::try_from(c).map_err(|_| CharCheckError {
+            invalid_value: c,
         })?;
-        Ok(&*bytes.cast::<Self>())
+        Ok(&*value)
     }
 }
 
@@ -310,10 +325,11 @@ macro_rules! impl_tuple {
             type Error = $error<$($type::Error),+>;
 
             #[allow(clippy::unneeded_wildcard_pattern)]
-            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+            unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+                let bytes = value.cast::<u8>();
                 let field_bytes = ($(bytes.add(memoffset::offset_of_tuple!(Self, $index)),)+);
-                $($type::check_bytes(field_bytes.$index, context).map_err($error::$type)?;)+
-                Ok(&*bytes.cast::<Self>())
+                $($type::check_bytes(field_bytes.$index.cast::<$type>(), context).map_err($error::$type)?;)+
+                Ok(&*value)
             }
         }
 
@@ -357,13 +373,13 @@ macro_rules! impl_array {
         impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T; $len] {
             type Error = ArrayCheckError<T::Error>;
 
-            unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+            unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
                 #[allow(clippy::reversed_empty_ranges)]
                 for index in 0..$len {
-                    let el_bytes = bytes.add(index * mem::size_of::<T>());
-                    T::check_bytes(el_bytes, context).map_err(|error| ArrayCheckError { index, error })?;
+                    let el = value.cast::<T>().add(index);
+                    T::check_bytes(el, context).map_err(|error| ArrayCheckError { index, error })?;
                 }
-                Ok(&*bytes.cast::<Self>())
+                Ok(&*value)
             }
         }
 
@@ -378,12 +394,123 @@ impl_array! { 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15
 impl<T: CheckBytes<C>, C: ?Sized, const N: usize> CheckBytes<C> for [T; N] {
     type Error = ArrayCheckError<T::Error>;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
         for index in 0..N {
-            let el_bytes = bytes.add(index * mem::size_of::<T>());
-            T::check_bytes(el_bytes, context).map_err(|error| ArrayCheckError { index, error })?;
+            let el = value.cast::<T>().add(index);
+            T::check_bytes(el, context).map_err(|error| ArrayCheckError { index, error })?;
         }
-        Ok(&*bytes.cast::<Self>())
+        Ok(&*value)
+    }
+
+    fn layout(value: *const Self, _: &mut C) -> Result<Layout, Self::Error> {
+        Ok(Layout::new::<Self>())
+    }
+}
+
+/// An error resulting from an invalid slice.
+#[derive(Debug)]
+pub enum SliceCheckError<T> {
+    /// The layout of the slice was invalid
+    Layout(LayoutErr),
+    /// An element of the slice failed to validate
+    CheckBytes {
+        /// The index of the invalid element
+        index: usize,
+        /// The error that occured while validating the invalid element
+        error: T,
+    },
+}
+
+impl<T> From<LayoutErr> for SliceCheckError<T> {
+    fn from(e: LayoutErr) -> Self {
+        Self::Layout(e)
+    }
+}
+
+impl<T: fmt::Display> fmt::Display for SliceCheckError<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SliceCheckError::Layout(e) => write!(f, "layout error: {}", e),
+            SliceCheckError::CheckBytes { index, error } => write!(f, "check failed for slice index {}: {}", index, error),
+        }
+    }
+}
+
+impl<T: fmt::Debug + fmt::Display> Error for SliceCheckError<T> {}
+
+impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T] {
+    type Error = SliceCheckError<T::Error>;
+
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+        let (data, len) = core::mem::transmute::<*const Self, (*const T, usize)>(value);
+        for index in 0..len {
+            let el = data.add(index);
+            T::check_bytes(el, context).map_err(|error| SliceCheckError::CheckBytes { index, error })?;
+        }
+        Ok(&*value)
+    }
+}
+
+impl<T: CheckBytes<C>, C: ?Sized> CheckLayout<C> for [T] {
+    fn layout(ptr: *const Self, _: &mut C) -> Result<Layout, Self::Error> {
+        let (_, len) = unsafe { mem::transmute::<*const Self, (*const (), usize)>(ptr) };
+        Ok(Layout::array::<T>(len)?)
+    }
+}
+
+/// An error resulting from an invalid str.
+#[derive(Debug)]
+pub enum StrCheckError {
+    /// The layout of the slice was invalid
+    Layout(LayoutErr),
+    /// An element of the slice failed to validate
+    Utf8Error(Utf8Error),
+}
+
+impl From<LayoutErr> for StrCheckError {
+    fn from(e: LayoutErr) -> Self {
+        Self::Layout(e)
+    }
+}
+
+impl From<Utf8Error> for StrCheckError {
+    fn from(e: Utf8Error) -> Self {
+        Self::Utf8Error(e)
+    }
+}
+
+impl fmt::Display for StrCheckError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StrCheckError::Layout(e) => write!(f, "layout error: {}", e),
+            StrCheckError::Utf8Error(e) => write!(f, "utf8 error: {}", e),
+        }
+    }
+}
+
+impl Error for StrCheckError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            StrCheckError::Layout(e) => Some(e),
+            StrCheckError::Utf8Error(e) => Some(e),
+        }
+    }
+}
+
+impl<C: ?Sized> CheckBytes<C> for str {
+    type Error = StrCheckError;
+
+    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+        let (bytes, len) = mem::transmute::<*const Self, (*const u8, usize)>(value);
+        from_utf8(slice::from_raw_parts(bytes, len))?;
+        Ok(&*value)
+    }
+}
+
+impl<C: ?Sized> CheckLayout<C> for str {
+    fn layout(ptr: *const Self, _: &mut C) -> Result<Layout, Self::Error> {
+        let (_, len) = unsafe { mem::transmute::<*const Self, (*const (), usize)>(ptr) };
+        Ok(Layout::array::<u8>(len)?)
     }
 }
 
@@ -483,28 +610,30 @@ impl<T: fmt::Debug + fmt::Display> Error for EnumCheckError<T> {}
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
     type Error = StructCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
-        T::check_bytes(bytes.add(offset_of!(Self, start)), context).map_err(|error| {
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+        let bytes = value.cast::<u8>();
+        T::check_bytes(bytes.add(offset_of!(Self, start)).cast(), context).map_err(|error| {
             StructCheckError {
                 field_name: "start",
                 inner: Box::new(error),
             }
         })?;
-        T::check_bytes(bytes.add(offset_of!(Self, end)), context).map_err(|error| {
+        T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
                 inner: Box::new(error),
             }
         })?;
-        Ok(&*bytes.cast())
+        Ok(&*value)
     }
 }
 
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
     type Error = StructCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
-        T::check_bytes(bytes.add(offset_of!(Self, start)), context).map_err(|error| {
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+        let bytes = value.cast::<u8>();
+        T::check_bytes(bytes.add(offset_of!(Self, start)).cast(), context).map_err(|error| {
             StructCheckError {
                 field_name: "start",
                 inner: Box::new(error),
@@ -517,36 +646,38 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
 impl<C: ?Sized> CheckBytes<C> for ops::RangeFull {
     type Error = Unreachable;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, _context: &mut C) -> Result<&'a Self, Self::Error> {
-        Ok(&*bytes.cast())
+    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+        Ok(&*value)
     }
 }
 
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeTo<T> {
     type Error = StructCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
-        T::check_bytes(bytes.add(offset_of!(Self, end)), context).map_err(|error| {
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+        let bytes = value.cast::<u8>();
+        T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
                 inner: Box::new(error),
             }
         })?;
-        Ok(&*bytes.cast())
+        Ok(&*value)
     }
 }
 
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeToInclusive<T> {
     type Error = StructCheckError;
 
-    unsafe fn check_bytes<'a>(bytes: *const u8, context: &mut C) -> Result<&'a Self, Self::Error> {
-        T::check_bytes(bytes.add(offset_of!(Self, end)), context).map_err(|error| {
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+        let bytes = value.cast::<u8>();
+        T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
                 inner: Box::new(error),
             }
         })?;
-        Ok(&*bytes.cast())
+        Ok(&*value)
     }
 }
 
@@ -579,14 +710,13 @@ macro_rules! impl_nonzero {
             type Error = NonZeroCheckError;
 
             unsafe fn check_bytes<'a>(
-                bytes: *const u8,
+                value: *const Self,
                 context: &mut C,
             ) -> Result<&'a Self, Self::Error> {
-                let value = *$underlying::check_bytes(bytes, context)?;
-                if value == 0 {
+                if *$underlying::check_bytes(value.cast(), context)? == 0 {
                     Err(NonZeroCheckError::IsZero)
                 } else {
-                    Ok(&*bytes.cast())
+                    Ok(&*value)
                 }
             }
         }
