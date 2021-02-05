@@ -93,7 +93,6 @@
 #![cfg_attr(feature = "const_generics", allow(incomplete_features))]
 
 use core::{
-    alloc::{Layout, LayoutErr},
     convert::TryFrom,
     fmt,
     marker::{PhantomData, PhantomPinned},
@@ -131,16 +130,6 @@ pub trait CheckBytes<C: ?Sized> {
     /// The passed pointer must be aligned and point to enough bytes to
     /// represent the type.
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error>;
-}
-
-pub trait CheckLayout<C: ?Sized>: CheckBytes<C> {
-    fn layout(value: *const Self, context: &mut C) -> Result<Layout, Self::Error>;
-}
-
-impl<T: CheckBytes<C>, C: ?Sized> CheckLayout<C> for T {
-    fn layout(_: *const Self, _: &mut C) -> Result<Layout, Self::Error> {
-        Ok(Layout::new::<Self>())
-    }
 }
 
 /// An error that cannot be produced.
@@ -410,8 +399,6 @@ impl<T: CheckBytes<C>, C: ?Sized, const N: usize> CheckBytes<C> for [T; N] {
 /// An error resulting from an invalid slice.
 #[derive(Debug)]
 pub enum SliceCheckError<T> {
-    /// The layout of the slice was invalid
-    Layout(LayoutErr),
     /// An element of the slice failed to validate
     CheckBytes {
         /// The index of the invalid element
@@ -421,16 +408,9 @@ pub enum SliceCheckError<T> {
     },
 }
 
-impl<T> From<LayoutErr> for SliceCheckError<T> {
-    fn from(e: LayoutErr) -> Self {
-        Self::Layout(e)
-    }
-}
-
 impl<T: fmt::Display> fmt::Display for SliceCheckError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SliceCheckError::Layout(e) => write!(f, "layout error: {}", e),
             SliceCheckError::CheckBytes { index, error } => write!(f, "check failed for slice index {}: {}", index, error),
         }
     }
@@ -451,26 +431,11 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T] {
     }
 }
 
-impl<T: CheckBytes<C>, C: ?Sized> CheckLayout<C> for [T] {
-    fn layout(ptr: *const Self, _: &mut C) -> Result<Layout, Self::Error> {
-        let (_, len) = unsafe { mem::transmute::<*const Self, (*const (), usize)>(ptr) };
-        Ok(Layout::array::<T>(len)?)
-    }
-}
-
 /// An error resulting from an invalid str.
 #[derive(Debug)]
 pub enum StrCheckError {
-    /// The layout of the slice was invalid
-    Layout(LayoutErr),
     /// An element of the slice failed to validate
     Utf8Error(Utf8Error),
-}
-
-impl From<LayoutErr> for StrCheckError {
-    fn from(e: LayoutErr) -> Self {
-        Self::Layout(e)
-    }
 }
 
 impl From<Utf8Error> for StrCheckError {
@@ -482,7 +447,6 @@ impl From<Utf8Error> for StrCheckError {
 impl fmt::Display for StrCheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StrCheckError::Layout(e) => write!(f, "layout error: {}", e),
             StrCheckError::Utf8Error(e) => write!(f, "utf8 error: {}", e),
         }
     }
@@ -491,7 +455,6 @@ impl fmt::Display for StrCheckError {
 impl Error for StrCheckError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            StrCheckError::Layout(e) => Some(e),
             StrCheckError::Utf8Error(e) => Some(e),
         }
     }
@@ -504,13 +467,6 @@ impl<C: ?Sized> CheckBytes<C> for str {
         let (bytes, len) = mem::transmute::<*const Self, (*const u8, usize)>(value);
         from_utf8(slice::from_raw_parts(bytes, len))?;
         Ok(&*value)
-    }
-}
-
-impl<C: ?Sized> CheckLayout<C> for str {
-    fn layout(ptr: *const Self, _: &mut C) -> Result<Layout, Self::Error> {
-        let (_, len) = unsafe { mem::transmute::<*const Self, (*const (), usize)>(ptr) };
-        Ok(Layout::array::<u8>(len)?)
     }
 }
 
