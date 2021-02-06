@@ -96,7 +96,6 @@ use core::{
     convert::TryFrom,
     fmt,
     marker::{PhantomData, PhantomPinned},
-    mem,
     num::{
         NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroU128, NonZeroU16,
         NonZeroU32, NonZeroU64, NonZeroU8,
@@ -109,6 +108,7 @@ use core::{
         AtomicU8,
     },
 };
+use ptr_meta::PtrExt;
 use std::error::Error;
 
 pub use bytecheck_derive::CheckBytes;
@@ -422,9 +422,9 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T] {
     type Error = SliceCheckError<T::Error>;
 
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
-        let (data, len) = core::mem::transmute::<*const Self, (*const T, usize)>(value);
+        let (data, len) = value.to_raw_parts();
         for index in 0..len {
-            let el = data.add(index);
+            let el = data.cast::<T>().add(index);
             T::check_bytes(el, context).map_err(|error| SliceCheckError::CheckBytes { index, error })?;
         }
         Ok(&*value)
@@ -464,8 +464,8 @@ impl<C: ?Sized> CheckBytes<C> for str {
     type Error = StrCheckError;
 
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
-        let (bytes, len) = mem::transmute::<*const Self, (*const u8, usize)>(value);
-        from_utf8(slice::from_raw_parts(bytes, len))?;
+        let (data, len) = value.to_raw_parts();
+        from_utf8(slice::from_raw_parts(data.cast(), len))?;
         Ok(&*value)
     }
 }

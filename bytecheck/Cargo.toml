@@ -16,6 +16,7 @@ readme = "crates-io.md"
 [dependencies]
 bytecheck_derive = { version = "=0.3.0", path = "../bytecheck_derive" }
 memoffset = "0.6"
+ptr_meta = { version = "0.1", path = "../../ptr_meta/ptr_meta" }
 
 [dev-dependencies]
 bytecheck_derive = { version = "0.3.0", path = "../bytecheck_derive" }
