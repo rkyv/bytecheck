@@ -116,8 +116,8 @@ pub use memoffset::offset_of;
 
 /// A type that can check whether a pointer points to a valid value.
 ///
-/// `Check` can be derived with [`Check`](macro@Check) or implemented manually
-/// for custom behavior.
+/// `CheckBytes` can be derived with [`CheckBytes`](macro@CheckBytes) or
+/// implemented manually for custom behavior.
 pub trait CheckBytes<C: ?Sized> {
     /// The error that may result from checking the type.
     type Error: Error + 'static;
