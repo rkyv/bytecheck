@@ -390,10 +390,6 @@ impl<T: CheckBytes<C>, C: ?Sized, const N: usize> CheckBytes<C> for [T; N] {
         }
         Ok(&*value)
     }
-
-    fn layout(value: *const Self, _: &mut C) -> Result<Layout, Self::Error> {
-        Ok(Layout::new::<Self>())
-    }
 }
 
 /// An error resulting from an invalid slice.
