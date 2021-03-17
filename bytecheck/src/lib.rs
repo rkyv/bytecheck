@@ -89,9 +89,6 @@
 //! - `const_generics`: Extends the implementations of [`CheckBytes`] to all
 //! arrays and not just arrays up to length 32.
 
-#![cfg_attr(feature = "const_generics", feature(const_generics))]
-#![cfg_attr(feature = "const_generics", allow(incomplete_features))]
-
 use core::{
     convert::TryFrom,
     fmt,
@@ -422,7 +419,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T] {
     type Error = SliceCheckError<T::Error>;
 
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
-        let (data, len) = value.to_raw_parts();
+        let (data, len) = PtrExt::to_raw_parts(value);
         for index in 0..len {
             let el = data.cast::<T>().add(index);
             T::check_bytes(el, context).map_err(|error| SliceCheckError::CheckBytes { index, error })?;
@@ -464,7 +461,7 @@ impl<C: ?Sized> CheckBytes<C> for str {
     type Error = StrCheckError;
 
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
-        let (data, len) = value.to_raw_parts();
+        let (data, len) = PtrExt::to_raw_parts(value);
         from_utf8(slice::from_raw_parts(data.cast(), len))?;
         Ok(&*value)
     }

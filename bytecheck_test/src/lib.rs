@@ -364,7 +364,7 @@ mod tests {
         struct TestError {
             expected: i32,
             found: i32,
-        };
+        }
 
         impl fmt::Display for TestError {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
