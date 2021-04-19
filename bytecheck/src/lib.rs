@@ -100,11 +100,13 @@ use core::{
     ops,
     slice,
     str::{from_utf8, Utf8Error},
-    sync::atomic::{
-        AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64,
-        AtomicU8,
-    },
 };
+#[cfg(bytecheck_atomic)]
+use core::sync::atomic::{
+    AtomicBool, AtomicI8, AtomicI16, AtomicI32, AtomicU8, AtomicU16, AtomicU32
+};
+#[cfg(bytecheck_atomic_64)]
+use core::sync::atomic::{AtomicI64, AtomicU64};
 use ptr_meta::PtrExt;
 use std::error::Error;
 
@@ -171,13 +173,21 @@ impl_primitive!(u64);
 impl_primitive!(u128);
 impl_primitive!(f32);
 impl_primitive!(f64);
+#[cfg(bytecheck_atomic)]
 impl_primitive!(AtomicI8);
+#[cfg(bytecheck_atomic)]
 impl_primitive!(AtomicI16);
+#[cfg(bytecheck_atomic)]
 impl_primitive!(AtomicI32);
+#[cfg(bytecheck_atomic_64)]
 impl_primitive!(AtomicI64);
+#[cfg(bytecheck_atomic)]
 impl_primitive!(AtomicU8);
+#[cfg(bytecheck_atomic)]
 impl_primitive!(AtomicU16);
+#[cfg(bytecheck_atomic)]
 impl_primitive!(AtomicU32);
+#[cfg(bytecheck_atomic_64)]
 impl_primitive!(AtomicU64);
 
 impl<T: ?Sized, C: ?Sized> CheckBytes<C> for PhantomData<T> {
@@ -241,6 +251,7 @@ impl<C: ?Sized> CheckBytes<C> for bool {
     }
 }
 
+#[cfg(bytecheck_atomic)]
 impl<C: ?Sized> CheckBytes<C> for AtomicBool {
     type Error = BoolCheckError;
 
