@@ -137,8 +137,9 @@ pub trait CheckBytes<C: ?Sized> {
 pub enum Unreachable {}
 
 impl fmt::Display for Unreachable {
+    #[inline]
     fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        unreachable!();
+        unsafe { core::hint::unreachable_unchecked() }
     }
 }
 
@@ -149,6 +150,7 @@ macro_rules! impl_primitive {
         impl<C: ?Sized> CheckBytes<C> for $type {
             type Error = Unreachable;
 
+            #[inline]
             unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
                 Ok(&*value)
             }
@@ -181,6 +183,7 @@ impl_primitive!(AtomicU64);
 impl<T: ?Sized, C: ?Sized> CheckBytes<C> for PhantomData<T> {
     type Error = Unreachable;
 
+    #[inline]
     unsafe fn check_bytes<'a>(
         value: *const Self,
         _: &mut C,
@@ -192,6 +195,7 @@ impl<T: ?Sized, C: ?Sized> CheckBytes<C> for PhantomData<T> {
 impl<C: ?Sized> CheckBytes<C> for PhantomPinned {
     type Error = Unreachable;
 
+    #[inline]
     unsafe fn check_bytes<'a>(
         value: *const Self,
         _: &mut C,
@@ -210,6 +214,7 @@ pub struct BoolCheckError {
 }
 
 impl fmt::Display for BoolCheckError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -224,6 +229,7 @@ impl Error for BoolCheckError {}
 impl<C: ?Sized> CheckBytes<C> for bool {
     type Error = BoolCheckError;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
         let byte = *value.cast::<u8>();
         match byte {
@@ -238,6 +244,7 @@ impl<C: ?Sized> CheckBytes<C> for bool {
 impl<C: ?Sized> CheckBytes<C> for AtomicBool {
     type Error = BoolCheckError;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
         let byte = *value.cast::<u8>();
         match byte {
@@ -259,6 +266,13 @@ pub struct CharCheckError {
     pub invalid_value: u32,
 }
 
+impl From<Unreachable> for CharCheckError {
+    #[inline]
+    fn from(_: Unreachable) -> Self {
+        unsafe { core::hint::unreachable_unchecked() }
+    }
+}
+
 impl fmt::Display for CharCheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -274,8 +288,9 @@ impl Error for CharCheckError {}
 impl<C: ?Sized> CheckBytes<C> for char {
     type Error = CharCheckError;
 
-    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
-        let c = *value.cast::<u32>();
+    #[inline]
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+        let c = *u32::check_bytes(value.cast(), context)?;
         char::try_from(c).map_err(|_| CharCheckError {
             invalid_value: c,
         })?;
@@ -297,6 +312,7 @@ macro_rules! impl_tuple {
         }
 
         impl<$($type: fmt::Display),*> fmt::Display for $error<$($type),+> {
+            #[inline]
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 const SIZE: usize = [$($index,)+].len();
                 match self {
@@ -310,6 +326,7 @@ macro_rules! impl_tuple {
         impl<$($type: CheckBytes<C>,)+ C: ?Sized> CheckBytes<C> for ($($type,)+) {
             type Error = $error<$($type::Error),+>;
 
+            #[inline]
             #[allow(clippy::unneeded_wildcard_pattern)]
             unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
                 let bytes = value.cast::<u8>();
@@ -341,6 +358,7 @@ pub struct ArrayCheckError<T> {
 }
 
 impl<T: fmt::Display> fmt::Display for ArrayCheckError<T> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -359,6 +377,7 @@ macro_rules! impl_array {
         impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T; $len] {
             type Error = ArrayCheckError<T::Error>;
 
+            #[inline]
             unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
                 #[allow(clippy::reversed_empty_ranges)]
                 for index in 0..$len {
@@ -380,6 +399,7 @@ impl_array! { 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15
 impl<T: CheckBytes<C>, C: ?Sized, const N: usize> CheckBytes<C> for [T; N] {
     type Error = ArrayCheckError<T::Error>;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
         for index in 0..N {
             let el = value.cast::<T>().add(index);
@@ -402,6 +422,7 @@ pub enum SliceCheckError<T> {
 }
 
 impl<T: fmt::Display> fmt::Display for SliceCheckError<T> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SliceCheckError::CheckBytes { index, error } => write!(f, "check failed for slice index {}: {}", index, error),
@@ -414,6 +435,7 @@ impl<T: fmt::Debug + fmt::Display> Error for SliceCheckError<T> {}
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T] {
     type Error = SliceCheckError<T::Error>;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
         let (data, len) = PtrExt::to_raw_parts(value);
         for index in 0..len {
@@ -438,6 +460,7 @@ impl From<Utf8Error> for StrCheckError {
 }
 
 impl fmt::Display for StrCheckError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             StrCheckError::Utf8Error(e) => write!(f, "utf8 error: {}", e),
@@ -446,6 +469,7 @@ impl fmt::Display for StrCheckError {
 }
 
 impl Error for StrCheckError {
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             StrCheckError::Utf8Error(e) => Some(e),
@@ -456,6 +480,7 @@ impl Error for StrCheckError {
 impl<C: ?Sized> CheckBytes<C> for str {
     type Error = StrCheckError;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
         let (data, len) = PtrExt::to_raw_parts(value);
         from_utf8(slice::from_raw_parts(data.cast(), len))?;
@@ -473,6 +498,7 @@ pub struct StructCheckError {
 }
 
 impl fmt::Display for StructCheckError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -494,6 +520,7 @@ pub struct TupleStructCheckError {
 }
 
 impl fmt::Display for TupleStructCheckError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -530,6 +557,7 @@ pub enum EnumCheckError<T> {
 }
 
 impl<T: fmt::Display> fmt::Display for EnumCheckError<T> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EnumCheckError::InvalidStruct {
@@ -559,6 +587,7 @@ impl<T: fmt::Debug + fmt::Display> Error for EnumCheckError<T> {}
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
     type Error = StructCheckError;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
         T::check_bytes(bytes.add(offset_of!(Self, start)).cast(), context).map_err(|error| {
@@ -580,6 +609,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
     type Error = StructCheckError;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
         T::check_bytes(bytes.add(offset_of!(Self, start)).cast(), context).map_err(|error| {
@@ -595,6 +625,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
 impl<C: ?Sized> CheckBytes<C> for ops::RangeFull {
     type Error = Unreachable;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
         Ok(&*value)
     }
@@ -603,6 +634,7 @@ impl<C: ?Sized> CheckBytes<C> for ops::RangeFull {
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeTo<T> {
     type Error = StructCheckError;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
         T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
@@ -618,6 +650,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeTo<T> {
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeToInclusive<T> {
     type Error = StructCheckError;
 
+    #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
         T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
@@ -638,12 +671,14 @@ pub enum NonZeroCheckError {
 }
 
 impl From<Unreachable> for NonZeroCheckError {
+    #[inline]
     fn from(_: Unreachable) -> Self {
-        unreachable!();
+        unsafe { core::hint::unreachable_unchecked() }
     }
 }
 
 impl fmt::Display for NonZeroCheckError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             NonZeroCheckError::IsZero => write!(f, "nonzero integer is zero"),
@@ -658,6 +693,7 @@ macro_rules! impl_nonzero {
         impl<C: ?Sized> CheckBytes<C> for $nonzero {
             type Error = NonZeroCheckError;
 
+            #[inline]
             unsafe fn check_bytes<'a>(
                 value: *const Self,
                 context: &mut C,
