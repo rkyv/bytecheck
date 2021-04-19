@@ -14,10 +14,10 @@ fn main() {
     let has_atomic32 = has_atomic64 || emscripten;
 
     if has_atomic64 {
-        println!("cargo:rustc-cfg=bytecheck_atomic_64");
+        println!("cargo:rustc-cfg=has_atomics_64");
     }
 
     if has_atomic32 {
-        println!("cargo:rustc-cfg=bytecheck_atomic");
+        println!("cargo:rustc-cfg=has_atomics");
     }
 }

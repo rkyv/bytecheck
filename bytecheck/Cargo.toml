@@ -15,9 +15,11 @@ readme = "crates-io.md"
 
 [dependencies]
 bytecheck_derive = { version = "=0.4.1", path = "../bytecheck_derive" }
+log = { version = "0.4", optional = true }
 memoffset = "0.6"
 ptr_meta = "0.1"
 
 [features]
-default = []
+default = ["const_generics", "std"]
 const_generics = []
+std = []

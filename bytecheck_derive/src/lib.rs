@@ -111,7 +111,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                 let field_checks = fields.named.iter().map(|f| {
                         let field = &f.ident;
                         let ty = &f.ty;
-                        quote_spanned! { ty.span() => <#ty as CheckBytes<__C>>::check_bytes(bytes.add(offset_of!(#name<#generic_args>, #field)).cast(), context).map_err(|e| StructCheckError { field_name: stringify!(#field), inner: e.into() })?; }
+                        quote_spanned! { ty.span() => <#ty as CheckBytes<__C>>::check_bytes(bytes.add(offset_of!(#name<#generic_args>, #field)).cast(), context).map_err(|e| StructCheckError { field_name: stringify!(#field), inner: handle_error(e) })?; }
                     });
 
                 quote! {
@@ -143,7 +143,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                         <#ty as CheckBytes<__C>>::check_bytes(
                             bytes.add(offset_of!(#name<#generic_args>, #index)).cast(),
                             context
-                        ).map_err(|e| TupleStructCheckError { field_index: #i, inner: e.into() })?;
+                        ).map_err(|e| TupleStructCheckError { field_index: #i, inner: handle_error(e) })?;
                     }
                 });
 
@@ -290,7 +290,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                                     variant_name: stringify!(#variant),
                                     inner: StructCheckError {
                                         field_name: stringify!(#name),
-                                        inner: e.into(),
+                                        inner: handle_error(e),
                                     },
                                 })?;
                             }
@@ -309,7 +309,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                                     variant_name: stringify!(#variant),
                                     inner: TupleStructCheckError {
                                         field_index: #i,
-                                        inner: e.into(),
+                                        inner: handle_error(e),
                                     },
                                 })?;
                             }
@@ -365,6 +365,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             use bytecheck::{
                 CheckBytes,
                 EnumCheckError,
+                handle_error,
                 offset_of,
                 StructCheckError,
                 TupleStructCheckError,
