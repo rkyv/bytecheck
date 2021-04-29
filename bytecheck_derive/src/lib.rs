@@ -316,7 +316,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                         });
                         quote_spanned! { name.span() => #(#checks)* }
                     }
-                    Fields::Unit => quote_spanned! { name.span() => () },
+                    Fields::Unit => quote_spanned! { name.span() => {} },
                 }
             });
 
