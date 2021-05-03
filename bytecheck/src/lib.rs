@@ -104,7 +104,6 @@ use core::{
     },
     ops,
     slice,
-    str::{from_utf8, Utf8Error},
 };
 #[cfg(has_atomics)]
 use core::sync::atomic::{
@@ -115,6 +114,10 @@ use core::sync::atomic::{AtomicI64, AtomicU64};
 use ptr_meta::PtrExt;
 #[cfg(feature = "std")]
 use std::error::Error;
+#[cfg(not(feature = "full_errors"))]
+use simdutf8::basic::{Utf8Error, from_utf8};
+#[cfg(feature = "full_errors")]
+use simdutf8::compat::{Utf8Error, from_utf8};
 
 pub use bytecheck_derive::CheckBytes;
 pub use memoffset::offset_of;
@@ -538,7 +541,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T] {
 /// An error resulting from an invalid str.
 #[derive(Debug)]
 pub enum StrCheckError {
-    /// An element of the slice failed to validate
+    /// The UTF-8 string failed to validate
     Utf8Error(Utf8Error),
 }
 

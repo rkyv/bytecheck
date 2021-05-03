@@ -18,8 +18,10 @@ bytecheck_derive = { version = "=0.4.1", path = "../bytecheck_derive" }
 log = { version = "0.4", optional = true }
 memoffset = "0.6"
 ptr_meta = "0.1"
+simdutf8 = { version = "0.1", default-features = false }
 
 [features]
 default = ["const_generics", "std"]
 const_generics = []
-std = []
+std = ["simdutf8/std"]
+full_errors = []
