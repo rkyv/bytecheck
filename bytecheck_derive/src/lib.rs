@@ -2,53 +2,93 @@
 
 extern crate proc_macro;
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{
     parse_macro_input, spanned::Spanned, AttrStyle, Data, DeriveInput, Error, Fields, Ident, Index,
-    Meta, NestedMeta,
+    Lit, LitStr, Meta, NestedMeta, parse_quote, Path, punctuated::Punctuated, Token, WherePredicate,
 };
 
+#[derive(Default)]
 struct Repr {
-    rust: Option<Span>,
-    transparent: Option<Span>,
-    packed: Option<Span>,
-    c: Option<Span>,
-    int: Option<Ident>,
+    pub rust: Option<Path>,
+    pub transparent: Option<Path>,
+    pub packed: Option<Path>,
+    pub c: Option<Path>,
+    pub int: Option<Path>,
 }
 
-impl Default for Repr {
-    fn default() -> Self {
-        Self {
-            rust: None,
-            transparent: None,
-            packed: None,
-            c: None,
-            int: None,
-        }
+#[derive(Default)]
+struct Attributes {
+    pub repr: Repr,
+    pub bound: Option<LitStr>,
+}
+
+fn parse_check_bytes_attributes(attributes: &mut Attributes, meta: &Meta) -> Result<(), Error> {
+    match meta {
+        Meta::NameValue(meta) => {
+            if meta.path.is_ident("bound") {
+                if let Lit::Str(ref lit_str) = meta.lit {
+                    if attributes.bound.is_none() {
+                        attributes.bound = Some(lit_str.clone());
+                        Ok(())
+                    } else {
+                        Err(Error::new_spanned(
+                            meta,
+                            "check_bytes bound already specified",
+                        ))
+                    }
+                } else {
+                    Err(Error::new_spanned(
+                        &meta.lit,
+                        "bound arguments must be a string",
+                    ))
+                }
+            } else {
+                Err(Error::new_spanned(
+                    &meta.path,
+                    "unrecognized check_bytes argument",
+                ))
+            }
+        },
+        _ => Err(Error::new_spanned(
+            meta,
+            "unrecognized check_bytes argument",
+        )),
     }
 }
 
-fn parse_attributes(input: &DeriveInput) -> Result<Repr, TokenStream> {
-    let mut result = Repr::default();
+fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
+    let mut result = Attributes::default();
     for a in input.attrs.iter() {
         if let AttrStyle::Outer = a.style {
             if let Ok(meta) = a.parse_meta() {
                 if let Meta::List(meta) = meta {
-                    if meta.path.is_ident("repr") {
+                    if meta.path.is_ident("check_bytes") {
+                        for nested in meta.nested.iter() {
+                            if let NestedMeta::Meta(meta) = nested {
+                                parse_check_bytes_attributes(&mut result, meta)?;
+                            } else {
+                                return Err(Error::new_spanned(
+                                    nested,
+                                    "check_bytes parameters must be metas"
+                                ));
+                            }
+                        }
+                    } else if meta.path.is_ident("repr") {
                         for n in meta.nested.iter() {
                             if let NestedMeta::Meta(meta) = n {
                                 if let Meta::Path(path) = meta {
                                     if path.is_ident("rust") {
-                                        result.rust = Some(path.span());
+                                        result.repr.rust = Some(path.clone());
                                     } else if path.is_ident("transparent") {
-                                        result.transparent = Some(path.span());
+                                        result.repr.transparent = Some(path.clone());
                                     } else if path.is_ident("packed") {
-                                        result.packed = Some(path.span());
+                                        result.repr.packed = Some(path.clone());
                                     } else if path.is_ident("C") {
-                                        result.c = Some(path.span());
+                                        result.repr.c = Some(path.clone());
                                     } else {
-                                        result.int = path.get_ident().cloned();
+                                        result.repr.int = Some(path.clone());
                                     }
                                 }
                             }
@@ -62,64 +102,76 @@ fn parse_attributes(input: &DeriveInput) -> Result<Repr, TokenStream> {
 }
 
 /// Derives `CheckBytes` for the labeled type.
-#[proc_macro_derive(CheckBytes)]
+///
+/// Additional arguments can be specified using the `#[check_bytes(...)]` attribute:
+///
+/// - `bound(...)`: Adds additional bounds to the `CheckBytes` implementation. This can be
+///   especially useful when dealing with recursive structures, where bounds may need to be omitted
+///   to prevent recursive type definitions.
+///
+/// This derive macro automatically adds a type bound `field: CheckBytes<__C>` for each field type.
+/// This can cause an overflow while evaluating trait bounds if the structure eventually references
+/// its own type, as the implementation of `CheckBytes` for a struct depends on each field type
+/// implementing it as well. Adding the attribute `#[omit_bounds]` to a field will suppress this
+/// trait bound and allow recursive structures. This may be too coarse for some types, in which case
+/// additional type bounds may be required with `bound(...)`.
+#[proc_macro_derive(CheckBytes, attributes(check_bytes, omit_bounds))]
 pub fn check_bytes_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-
-    let repr = match parse_attributes(&input) {
-        Ok(repr) => repr,
-        Err(errors) => return proc_macro::TokenStream::from(errors),
-    };
-
-    let check_bytes_impl = derive_check_bytes(&input, &repr);
-
-    proc_macro::TokenStream::from(check_bytes_impl)
+    match derive_check_bytes(parse_macro_input!(input as DeriveInput)) {
+        Ok(result) => result.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
-fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
+fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
+    let attributes = parse_attributes(&input)?;
+
+    let mut impl_input_generics = input.generics.clone();
+    let impl_where_clause = impl_input_generics.make_where_clause();
+    if let Some(ref bounds) = attributes.bound {
+        let clauses = bounds.parse_with(Punctuated::<WherePredicate, Token![,]>::parse_terminated)?;
+        for clause in clauses {
+            impl_where_clause.predicates.push(clause);
+        }
+    }
+    impl_input_generics.params.push(parse_quote! { __C: ?Sized });
+
     let name = &input.ident;
 
-    let generic_params = input
-        .generics
-        .params
-        .iter()
-        .map(|p| quote_spanned! { p.span() => #p });
-    let generic_params = quote! { #(#generic_params,)* };
+    let (impl_generics, _, impl_where_clause) = impl_input_generics.split_for_impl();
+    let impl_where_clause = impl_where_clause.unwrap();
 
-    let generic_args = input.generics.type_params().map(|p| {
-        let name = &p.ident;
-        quote_spanned! { name.span() => #name }
-    });
-    let generic_args = quote! { #(#generic_args,)* };
-
-    let generic_predicates = match input.generics.where_clause {
-        Some(ref clause) => {
-            let predicates = clause.predicates.iter().map(|p| quote! { #p });
-            quote! { #(#predicates,)* }
-        }
-        None => quote! {},
-    };
+    input.generics.make_where_clause();
+    let (struct_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let where_clause = where_clause.unwrap();
 
     let check_bytes_impl = match input.data {
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => {
-                let field_wheres = fields.named.iter().map(|f| {
-                    let ty = &f.ty;
-                    quote_spanned! { ty.span() => #ty: CheckBytes<__C>, }
-                });
+                let mut check_where = impl_where_clause.clone();
+                for field in fields.named.iter()
+                    .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
+                {
+                    let ty = &field.ty;
+                    check_where.predicates.push(parse_quote! { #ty: CheckBytes<__C> });
+                }
 
                 let field_checks = fields.named.iter().map(|f| {
-                        let field = &f.ident;
-                        let ty = &f.ty;
-                        quote_spanned! { ty.span() => <#ty as CheckBytes<__C>>::check_bytes(bytes.add(offset_of!(#name<#generic_args>, #field)).cast(), context).map_err(|e| StructCheckError { field_name: stringify!(#field), inner: handle_error(e) })?; }
-                    });
+                    let field = &f.ident;
+                    let ty = &f.ty;
+                    quote_spanned! { ty.span() =>
+                        <#ty as CheckBytes<__C>>::check_bytes(
+                            bytes.add(offset_of!(#name #ty_generics, #field)).cast(),
+                            context
+                        ).map_err(|e| StructCheckError {
+                            field_name: stringify!(#field),
+                            inner: handle_error(e),
+                        })?;
+                    }
+                });
 
                 quote! {
-                    impl<__C: ?Sized, #generic_params> CheckBytes<__C> for #name<#generic_args>
-                    where
-                        #generic_predicates
-                        #(#field_wheres)*
-                    {
+                    impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                         type Error = StructCheckError;
 
                         unsafe fn check_bytes<'a>(value: *const Self, context: &mut __C) -> Result<&'a Self, Self::Error> {
@@ -131,28 +183,30 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                 }
             }
             Fields::Unnamed(ref fields) => {
-                let field_wheres = fields.unnamed.iter().map(|f| {
-                    let ty = &f.ty;
-                    quote_spanned! { ty.span() => #ty: CheckBytes<__C>, }
-                });
+                let mut check_where = impl_where_clause.clone();
+                for field in fields.unnamed.iter()
+                    .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
+                {
+                    let ty = &field.ty;
+                    check_where.predicates.push(parse_quote! { #ty: CheckBytes<__C> });
+                }
 
                 let field_checks = fields.unnamed.iter().enumerate().map(|(i, f)| {
                     let ty = &f.ty;
                     let index = Index::from(i);
                     quote_spanned! { ty.span() =>
                         <#ty as CheckBytes<__C>>::check_bytes(
-                            bytes.add(offset_of!(#name<#generic_args>, #index)).cast(),
+                            bytes.add(offset_of!(#name #ty_generics, #index)).cast(),
                             context
-                        ).map_err(|e| TupleStructCheckError { field_index: #i, inner: handle_error(e) })?;
+                        ).map_err(|e| TupleStructCheckError {
+                            field_index: #i,
+                            inner: handle_error(e),
+                        })?;
                     }
                 });
 
                 quote! {
-                    impl<__C: ?Sized, #generic_params> CheckBytes<__C> for #name<#generic_args>
-                    where
-                        #generic_predicates
-                        #(#field_wheres)*
-                    {
+                    impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                         type Error = TupleStructCheckError;
 
                         unsafe fn check_bytes<'a>(value: *const Self, context: &mut __C) -> Result<&'a Self, Self::Error> {
@@ -165,10 +219,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             }
             Fields::Unit => {
                 quote! {
-                    impl<__C: ?Sized, #generic_params> CheckBytes<__C> for #name<#generic_args>
-                    where
-                        #generic_predicates
-                    {
+                    impl #impl_generics CheckBytes<__C> for #name #ty_generics #impl_where_clause {
                         type Error = Unreachable;
 
                         unsafe fn check_bytes<'a>(value: *const Self, context: &mut __C) -> Result<&'a Self, Self::Error> {
@@ -179,40 +230,49 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             }
         },
         Data::Enum(ref data) => {
-            if let Some(span) = repr.rust.or(repr.transparent).or(repr.packed).or(repr.c) {
-                return Error::new(span, "archive self enums must be repr(C) or repr(Int)")
-                    .to_compile_error();
+            if let Some(path) = attributes.repr.rust
+                .or(attributes.repr.transparent)
+                .or(attributes.repr.packed)
+                .or(attributes.repr.c)
+            {
+                return Err(Error::new_spanned(
+                    path,
+                    "archive self enums must be repr(C) or repr(Int)"
+                ));
             }
 
-            let repr = match repr.int {
+            let repr = match attributes.repr.int {
                 None => {
-                    return Error::new(
+                    return Err(Error::new(
                         input.span(),
                         "enums implementing CheckBytes must be repr(Int)",
-                    )
-                    .to_compile_error()
+                    ));
                 }
                 Some(ref repr) => repr,
             };
 
-            let field_wheres = data.variants.iter().map(|v| match v.fields {
-                Fields::Named(ref fields) => {
-                    let field_wheres = fields.named.iter().map(|f| {
-                        let ty = &f.ty;
-                        quote_spanned! { f.span() =>  #ty: CheckBytes<__C>, }
-                    });
-                    quote! { #(#field_wheres)* }
+            let mut check_where = impl_where_clause.clone();
+            for v in data.variants.iter() {
+                match v.fields {
+                    Fields::Named(ref fields) => {
+                        for field in fields.named.iter()
+                            .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
+                        {
+                            let ty = &field.ty;
+                            check_where.predicates.push(parse_quote! { #ty: CheckBytes<__C> });
+                        }
+                    }
+                    Fields::Unnamed(ref fields) => {
+                        for field in fields.unnamed.iter()
+                            .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
+                        {
+                            let ty = &field.ty;
+                            check_where.predicates.push(parse_quote! { #ty: CheckBytes<__C> });
+                        }
+                    }
+                    Fields::Unit => (),
                 }
-                Fields::Unnamed(ref fields) => {
-                    let field_wheres = fields.unnamed.iter().map(|f| {
-                        let ty = &f.ty;
-                        quote_spanned! { f.span() =>  #ty: CheckBytes<__C>, }
-                    });
-                    quote! { #(#field_wheres)* }
-                }
-                Fields::Unit => quote! {},
-            });
-            let field_wheres = quote! { #(#field_wheres)* };
+            }
 
             let tag_variant_defs = data.variants.iter().map(|v| {
                 let variant = &v.ident;
@@ -248,13 +308,10 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                         });
                         quote_spanned! { name.span() =>
                             #[repr(C)]
-                            struct #variant_name<#generic_params>
-                            where
-                                #generic_predicates
-                            {
+                            struct #variant_name #struct_generics #where_clause {
                                 __tag: Tag,
                                 #(#fields,)*
-                                __phantom: PhantomData<(#generic_args)>,
+                                __phantom: PhantomData<#name #ty_generics>,
                             }
                         }
                     },
@@ -265,9 +322,11 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                         });
                         quote_spanned! { name.span() =>
                             #[repr(C)]
-                            struct #variant_name<#generic_params>(Tag, #(#fields,)* PhantomData<(#generic_args)>)
-                            where
-                                #generic_predicates;
+                            struct #variant_name #struct_generics (
+                                Tag,
+                                #(#fields,)*
+                                PhantomData<#name #ty_generics>
+                            ) #where_clause;
                         }
                     },
                     Fields::Unit => quote! {},
@@ -284,7 +343,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                             let ty = &f.ty;
                             quote! {
                                 <#ty as CheckBytes<__C>>::check_bytes(
-                                    bytes.add(offset_of!(#variant_name<#generic_args>, #name)).cast(),
+                                    bytes.add(offset_of!(#variant_name #ty_generics, #name)).cast(),
                                     context
                                 ).map_err(|e| EnumCheckError::InvalidStruct {
                                     variant_name: stringify!(#variant),
@@ -303,7 +362,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
                             let index = Index::from(i + 1);
                             quote! {
                                 <#ty as CheckBytes<__C>>::check_bytes(
-                                    bytes.add(offset_of!(#variant_name<#generic_args>, #index)).cast(),
+                                    bytes.add(offset_of!(#variant_name #ty_generics, #index)).cast(),
                                     context
                                 ).map_err(|e| EnumCheckError::InvalidTuple {
                                     variant_name: stringify!(#variant),
@@ -334,11 +393,7 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
 
                 #(#variant_structs)*
 
-                impl<__C: ?Sized, #generic_params> CheckBytes<__C> for #name<#generic_args>
-                where
-                    #generic_predicates
-                    #field_wheres
-                {
+                impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                     type Error = EnumCheckError<#repr>;
 
                     unsafe fn check_bytes<'a>(value: *const Self, context: &mut __C) -> Result<&'a Self, Self::Error> {
@@ -354,12 +409,11 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
             }
         }
         Data::Union(_) => {
-            return Error::new(input.span(), "CheckBytes cannot be derived for unions")
-                .to_compile_error()
+            return Err(Error::new(input.span(), "CheckBytes cannot be derived for unions"));
         }
     };
 
-    quote! {
+    Ok(quote! {
         const _: () = {
             use core::marker::PhantomData;
             use bytecheck::{
@@ -374,5 +428,5 @@ fn derive_check_bytes(input: &DeriveInput, repr: &Repr) -> TokenStream {
 
             #check_bytes_impl
         };
-    }
+    })
 }

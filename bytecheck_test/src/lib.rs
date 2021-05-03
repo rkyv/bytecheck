@@ -426,4 +426,37 @@ mod tests {
             <str as CheckBytes<()>>::check_bytes("hello world" as *const str, &mut ()).unwrap();
         }
     }
+
+    #[test]
+    fn test_recursive() {
+        struct MyBox<T: ?Sized> {
+            inner: *const T,
+        }
+
+        impl<T: CheckBytes<C>, C: Default + ?Sized> CheckBytes<C> for MyBox<T> {
+            type Error = T::Error;
+
+            unsafe fn check_bytes<'a>(
+                value: *const Self,
+                context: &mut C
+            ) -> Result<&'a Self, Self::Error> {
+                T::check_bytes((*value).inner, context)?;
+                Ok(&*value)
+            }
+        }
+
+        #[derive(CheckBytes)]
+        #[check_bytes(bound = "__C: Default")]
+        #[repr(u8)]
+        enum Node {
+            Nil,
+            Cons(#[omit_bounds] MyBox<Node>),
+        }
+
+        unsafe {
+            let nil = Node::Nil;
+            let cons = Node::Cons(MyBox { inner: &nil as *const Node });
+            Node::check_bytes(&cons, &mut ()).unwrap();
+        }
+    }
 }
