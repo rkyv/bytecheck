@@ -94,6 +94,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(has_atomics)]
+use core::sync::atomic::{
+    AtomicBool, AtomicI16, AtomicI32, AtomicI8, AtomicU16, AtomicU32, AtomicU8,
+};
+#[cfg(has_atomics_64)]
+use core::sync::atomic::{AtomicI64, AtomicU64};
 use core::{
     convert::TryFrom,
     fmt,
@@ -102,22 +108,15 @@ use core::{
         NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroU128, NonZeroU16,
         NonZeroU32, NonZeroU64, NonZeroU8,
     },
-    ops,
-    slice,
+    ops, slice,
 };
-#[cfg(has_atomics)]
-use core::sync::atomic::{
-    AtomicBool, AtomicI8, AtomicI16, AtomicI32, AtomicU8, AtomicU16, AtomicU32
-};
-#[cfg(has_atomics_64)]
-use core::sync::atomic::{AtomicI64, AtomicU64};
 use ptr_meta::PtrExt;
+#[cfg(not(feature = "full_errors"))]
+use simdutf8::basic::{from_utf8, Utf8Error};
+#[cfg(feature = "full_errors")]
+use simdutf8::compat::{from_utf8, Utf8Error};
 #[cfg(feature = "std")]
 use std::error::Error;
-#[cfg(not(feature = "full_errors"))]
-use simdutf8::basic::{Utf8Error, from_utf8};
-#[cfg(feature = "full_errors")]
-use simdutf8::compat::{Utf8Error, from_utf8};
 
 pub use bytecheck_derive::CheckBytes;
 pub use memoffset::offset_of;
@@ -140,7 +139,8 @@ pub trait CheckBytes<C: ?Sized> {
     ///
     /// The passed pointer must be aligned and point to enough bytes to
     /// represent the type.
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error>;
+    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C)
+        -> Result<&'a Self, Self::Error>;
 }
 
 // std error handling
@@ -229,7 +229,10 @@ macro_rules! impl_primitive {
             type Error = Unreachable;
 
             #[inline]
-            unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+            unsafe fn check_bytes<'a>(
+                value: *const Self,
+                _: &mut C,
+            ) -> Result<&'a Self, Self::Error> {
                 Ok(&*value)
             }
         }
@@ -270,10 +273,7 @@ impl<T: ?Sized, C: ?Sized> CheckBytes<C> for PhantomData<T> {
     type Error = Unreachable;
 
     #[inline]
-    unsafe fn check_bytes<'a>(
-        value: *const Self,
-        _: &mut C,
-    ) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
         Ok(&*value)
     }
 }
@@ -282,10 +282,7 @@ impl<C: ?Sized> CheckBytes<C> for PhantomPinned {
     type Error = Unreachable;
 
     #[inline]
-    unsafe fn check_bytes<'a>(
-        value: *const Self,
-        _: &mut C,
-    ) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
         Ok(&*value)
     }
 }
@@ -378,11 +375,12 @@ impl<C: ?Sized> CheckBytes<C> for char {
     type Error = CharCheckError;
 
     #[inline]
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
         let c = *u32::check_bytes(value.cast(), context)?;
-        char::try_from(c).map_err(|_| CharCheckError {
-            invalid_value: c,
-        })?;
+        char::try_from(c).map_err(|_| CharCheckError { invalid_value: c })?;
         Ok(&*value)
     }
 }
@@ -491,7 +489,10 @@ impl<T: CheckBytes<C>, C: ?Sized, const N: usize> CheckBytes<C> for [T; N] {
     type Error = ArrayCheckError<T::Error>;
 
     #[inline]
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
         for index in 0..N {
             let el = value.cast::<T>().add(index);
             T::check_bytes(el, context).map_err(|error| ArrayCheckError { index, error })?;
@@ -516,7 +517,9 @@ impl<T: fmt::Display> fmt::Display for SliceCheckError<T> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SliceCheckError::CheckBytes { index, error } => write!(f, "check failed for slice index {}: {}", index, error),
+            SliceCheckError::CheckBytes { index, error } => {
+                write!(f, "check failed for slice index {}: {}", index, error)
+            }
         }
     }
 }
@@ -528,11 +531,15 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T] {
     type Error = SliceCheckError<T::Error>;
 
     #[inline]
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
         let (data, len) = PtrExt::to_raw_parts(value);
         for index in 0..len {
             let el = data.cast::<T>().add(index);
-            T::check_bytes(el, context).map_err(|error| SliceCheckError::CheckBytes { index, error })?;
+            T::check_bytes(el, context)
+                .map_err(|error| SliceCheckError::CheckBytes { index, error })?;
         }
         Ok(&*value)
     }
@@ -684,7 +691,10 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
     type Error = StructCheckError;
 
     #[inline]
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
         T::check_bytes(bytes.add(offset_of!(Self, start)).cast(), context).map_err(|error| {
             StructCheckError {
@@ -706,7 +716,10 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
     type Error = StructCheckError;
 
     #[inline]
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
         T::check_bytes(bytes.add(offset_of!(Self, start)).cast(), context).map_err(|error| {
             StructCheckError {
@@ -731,7 +744,10 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeTo<T> {
     type Error = StructCheckError;
 
     #[inline]
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
         T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
             StructCheckError {
@@ -747,7 +763,10 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeToInclusive<T> {
     type Error = StructCheckError;
 
     #[inline]
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
         T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
             StructCheckError {

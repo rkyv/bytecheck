@@ -5,8 +5,9 @@ extern crate proc_macro;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{
-    parse_macro_input, spanned::Spanned, AttrStyle, Data, DeriveInput, Error, Fields, Ident, Index,
-    Lit, LitStr, Meta, NestedMeta, parse_quote, Path, punctuated::Punctuated, Token, WherePredicate,
+    parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned, AttrStyle, Data,
+    DeriveInput, Error, Fields, Ident, Index, Lit, LitStr, Meta, NestedMeta, Path, Token,
+    WherePredicate,
 };
 
 #[derive(Default)]
@@ -50,7 +51,7 @@ fn parse_check_bytes_attributes(attributes: &mut Attributes, meta: &Meta) -> Res
                     "unrecognized check_bytes argument",
                 ))
             }
-        },
+        }
         _ => Err(Error::new_spanned(
             meta,
             "unrecognized check_bytes argument",
@@ -62,35 +63,31 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
     let mut result = Attributes::default();
     for a in input.attrs.iter() {
         if let AttrStyle::Outer = a.style {
-            if let Ok(meta) = a.parse_meta() {
-                if let Meta::List(meta) = meta {
-                    if meta.path.is_ident("check_bytes") {
-                        for nested in meta.nested.iter() {
-                            if let NestedMeta::Meta(meta) = nested {
-                                parse_check_bytes_attributes(&mut result, meta)?;
-                            } else {
-                                return Err(Error::new_spanned(
-                                    nested,
-                                    "check_bytes parameters must be metas"
-                                ));
-                            }
+            if let Ok(Meta::List(meta)) = a.parse_meta() {
+                if meta.path.is_ident("check_bytes") {
+                    for nested in meta.nested.iter() {
+                        if let NestedMeta::Meta(meta) = nested {
+                            parse_check_bytes_attributes(&mut result, meta)?;
+                        } else {
+                            return Err(Error::new_spanned(
+                                nested,
+                                "check_bytes parameters must be metas",
+                            ));
                         }
-                    } else if meta.path.is_ident("repr") {
-                        for n in meta.nested.iter() {
-                            if let NestedMeta::Meta(meta) = n {
-                                if let Meta::Path(path) = meta {
-                                    if path.is_ident("rust") {
-                                        result.repr.rust = Some(path.clone());
-                                    } else if path.is_ident("transparent") {
-                                        result.repr.transparent = Some(path.clone());
-                                    } else if path.is_ident("packed") {
-                                        result.repr.packed = Some(path.clone());
-                                    } else if path.is_ident("C") {
-                                        result.repr.c = Some(path.clone());
-                                    } else {
-                                        result.repr.int = Some(path.clone());
-                                    }
-                                }
+                    }
+                } else if meta.path.is_ident("repr") {
+                    for n in meta.nested.iter() {
+                        if let NestedMeta::Meta(Meta::Path(path)) = n {
+                            if path.is_ident("rust") {
+                                result.repr.rust = Some(path.clone());
+                            } else if path.is_ident("transparent") {
+                                result.repr.transparent = Some(path.clone());
+                            } else if path.is_ident("packed") {
+                                result.repr.packed = Some(path.clone());
+                            } else if path.is_ident("C") {
+                                result.repr.c = Some(path.clone());
+                            } else {
+                                result.repr.int = Some(path.clone());
                             }
                         }
                     }
@@ -129,12 +126,15 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
     let mut impl_input_generics = input.generics.clone();
     let impl_where_clause = impl_input_generics.make_where_clause();
     if let Some(ref bounds) = attributes.bound {
-        let clauses = bounds.parse_with(Punctuated::<WherePredicate, Token![,]>::parse_terminated)?;
+        let clauses =
+            bounds.parse_with(Punctuated::<WherePredicate, Token![,]>::parse_terminated)?;
         for clause in clauses {
             impl_where_clause.predicates.push(clause);
         }
     }
-    impl_input_generics.params.push(parse_quote! { __C: ?Sized });
+    impl_input_generics
+        .params
+        .push(parse_quote! { __C: ?Sized });
 
     let name = &input.ident;
 
@@ -149,11 +149,15 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => {
                 let mut check_where = impl_where_clause.clone();
-                for field in fields.named.iter()
+                for field in fields
+                    .named
+                    .iter()
                     .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
                 {
                     let ty = &field.ty;
-                    check_where.predicates.push(parse_quote! { #ty: CheckBytes<__C> });
+                    check_where
+                        .predicates
+                        .push(parse_quote! { #ty: CheckBytes<__C> });
                 }
 
                 let field_checks = fields.named.iter().map(|f| {
@@ -184,11 +188,15 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             }
             Fields::Unnamed(ref fields) => {
                 let mut check_where = impl_where_clause.clone();
-                for field in fields.unnamed.iter()
+                for field in fields
+                    .unnamed
+                    .iter()
                     .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
                 {
                     let ty = &field.ty;
-                    check_where.predicates.push(parse_quote! { #ty: CheckBytes<__C> });
+                    check_where
+                        .predicates
+                        .push(parse_quote! { #ty: CheckBytes<__C> });
                 }
 
                 let field_checks = fields.unnamed.iter().enumerate().map(|(i, f)| {
@@ -230,14 +238,16 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             }
         },
         Data::Enum(ref data) => {
-            if let Some(path) = attributes.repr.rust
+            if let Some(path) = attributes
+                .repr
+                .rust
                 .or(attributes.repr.transparent)
                 .or(attributes.repr.packed)
                 .or(attributes.repr.c)
             {
                 return Err(Error::new_spanned(
                     path,
-                    "archive self enums must be repr(C) or repr(Int)"
+                    "archive self enums must be repr(C) or repr(Int)",
                 ));
             }
 
@@ -255,19 +265,27 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             for v in data.variants.iter() {
                 match v.fields {
                     Fields::Named(ref fields) => {
-                        for field in fields.named.iter()
+                        for field in fields
+                            .named
+                            .iter()
                             .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
                         {
                             let ty = &field.ty;
-                            check_where.predicates.push(parse_quote! { #ty: CheckBytes<__C> });
+                            check_where
+                                .predicates
+                                .push(parse_quote! { #ty: CheckBytes<__C> });
                         }
                     }
                     Fields::Unnamed(ref fields) => {
-                        for field in fields.unnamed.iter()
+                        for field in fields
+                            .unnamed
+                            .iter()
                             .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
                         {
                             let ty = &field.ty;
-                            check_where.predicates.push(parse_quote! { #ty: CheckBytes<__C> });
+                            check_where
+                                .predicates
+                                .push(parse_quote! { #ty: CheckBytes<__C> });
                         }
                     }
                     Fields::Unit => (),
@@ -314,7 +332,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                 __phantom: PhantomData<#name #ty_generics>,
                             }
                         }
-                    },
+                    }
                     Fields::Unnamed(ref fields) => {
                         let fields = fields.unnamed.iter().map(|f| {
                             let ty = &f.ty;
@@ -328,7 +346,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                 PhantomData<#name #ty_generics>
                             ) #where_clause;
                         }
-                    },
+                    }
                     Fields::Unit => quote! {},
                 }
             });
@@ -409,7 +427,10 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             }
         }
         Data::Union(_) => {
-            return Err(Error::new(input.span(), "CheckBytes cannot be derived for unions"));
+            return Err(Error::new(
+                input.span(),
+                "CheckBytes cannot be derived for unions",
+            ));
         }
     };
 

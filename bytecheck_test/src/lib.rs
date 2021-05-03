@@ -17,7 +17,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -25,7 +26,8 @@ mod tests {
                 (&[
                     42u8, 16u8, 20u8, 3u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -33,7 +35,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0xd8u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -41,7 +44,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0x00u8, 0x11u8, 0u8,
                     255u8, 255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -49,7 +53,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -57,7 +62,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -71,10 +77,14 @@ mod tests {
 
         unsafe {
             <[bool; 4]>::check_bytes((&[1u8, 0u8, 1u8, 0u8] as *const u8).cast(), &mut ()).unwrap();
-            <[bool; 4]>::check_bytes((&[1u8, 2u8, 1u8, 0u8] as *const u8).cast(), &mut ()).unwrap_err();
-            <[bool; 4]>::check_bytes((&[2u8, 0u8, 1u8, 0u8] as *const u8).cast(), &mut ()).unwrap_err();
-            <[bool; 4]>::check_bytes((&[1u8, 0u8, 1u8, 2u8] as *const u8).cast(), &mut ()).unwrap_err();
-            <[bool; 4]>::check_bytes((&[1u8, 0u8, 1u8, 0u8, 2u8] as *const u8).cast(), &mut ()).unwrap();
+            <[bool; 4]>::check_bytes((&[1u8, 2u8, 1u8, 0u8] as *const u8).cast(), &mut ())
+                .unwrap_err();
+            <[bool; 4]>::check_bytes((&[2u8, 0u8, 1u8, 0u8] as *const u8).cast(), &mut ())
+                .unwrap_err();
+            <[bool; 4]>::check_bytes((&[1u8, 0u8, 1u8, 2u8] as *const u8).cast(), &mut ())
+                .unwrap_err();
+            <[bool; 4]>::check_bytes((&[1u8, 0u8, 1u8, 0u8, 2u8] as *const u8).cast(), &mut ())
+                .unwrap();
         }
     }
 
@@ -101,7 +111,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -109,7 +120,8 @@ mod tests {
                 (&[
                     42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -117,7 +129,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -125,7 +138,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -133,7 +147,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -141,7 +156,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -171,7 +187,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -179,7 +196,8 @@ mod tests {
                 (&[
                     42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -187,7 +205,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -195,7 +214,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -203,7 +223,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -211,7 +232,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -290,7 +312,8 @@ mod tests {
                 (&[
                     0u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8,
                     0u8, 0u8, 0u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -298,7 +321,8 @@ mod tests {
                 (&[
                     1u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8,
                     0u8, 0u8, 0u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -306,7 +330,8 @@ mod tests {
                 (&[
                     2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 25u8, 255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap();
@@ -314,7 +339,8 @@ mod tests {
                 (&[
                     3u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 25u8, 255u8, 255u8, 255u8,
-                ] as *const u8).cast(),
+                ] as *const u8)
+                    .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -402,9 +428,16 @@ mod tests {
         }
 
         unsafe {
-            Test::check_bytes((&[42u8, 0u8, 0u8, 0u8] as *const u8).cast(), &mut TestContext(42)).unwrap();
-            Test::check_bytes((&[41u8, 0u8, 0u8, 0u8] as *const u8).cast(), &mut TestContext(42))
-                .unwrap_err();
+            Test::check_bytes(
+                (&[42u8, 0u8, 0u8, 0u8] as *const u8).cast(),
+                &mut TestContext(42),
+            )
+            .unwrap();
+            Test::check_bytes(
+                (&[41u8, 0u8, 0u8, 0u8] as *const u8).cast(),
+                &mut TestContext(42),
+            )
+            .unwrap_err();
         }
 
         #[repr(transparent)]
@@ -412,17 +445,27 @@ mod tests {
         struct TestContainer(Test);
 
         unsafe {
-            TestContainer::check_bytes((&[42u8, 0u8, 0u8, 0u8] as *const u8).cast(), &mut TestContext(42))
-                .unwrap();
-            TestContainer::check_bytes((&[41u8, 0u8, 0u8, 0u8] as *const u8).cast(), &mut TestContext(42))
-                .unwrap_err();
+            TestContainer::check_bytes(
+                (&[42u8, 0u8, 0u8, 0u8] as *const u8).cast(),
+                &mut TestContext(42),
+            )
+            .unwrap();
+            TestContainer::check_bytes(
+                (&[41u8, 0u8, 0u8, 0u8] as *const u8).cast(),
+                &mut TestContext(42),
+            )
+            .unwrap_err();
         }
     }
 
     #[test]
     fn test_unsized() {
         unsafe {
-            <[i32] as CheckBytes<()>>::check_bytes(&[1, 2, 3, 4] as &[i32] as *const [i32], &mut ()).unwrap();
+            <[i32] as CheckBytes<()>>::check_bytes(
+                &[1, 2, 3, 4] as &[i32] as *const [i32],
+                &mut (),
+            )
+            .unwrap();
             <str as CheckBytes<()>>::check_bytes("hello world" as *const str, &mut ()).unwrap();
         }
     }
@@ -438,7 +481,7 @@ mod tests {
 
             unsafe fn check_bytes<'a>(
                 value: *const Self,
-                context: &mut C
+                context: &mut C,
             ) -> Result<&'a Self, Self::Error> {
                 T::check_bytes((*value).inner, context)?;
                 Ok(&*value)
@@ -455,7 +498,9 @@ mod tests {
 
         unsafe {
             let nil = Node::Nil;
-            let cons = Node::Cons(MyBox { inner: &nil as *const Node });
+            let cons = Node::Cons(MyBox {
+                inner: &nil as *const Node,
+            });
             Node::check_bytes(&cons, &mut ()).unwrap();
         }
     }
