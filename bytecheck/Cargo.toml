@@ -23,5 +23,5 @@ simdutf8 = { version = "0.1", default-features = false }
 [features]
 default = ["const_generics", "std"]
 const_generics = []
-std = ["simdutf8/std"]
 full_errors = []
+std = ["simdutf8/std"]

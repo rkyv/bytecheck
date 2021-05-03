@@ -88,6 +88,8 @@
 //!
 //! - `const_generics`: Extends the implementations of [`CheckBytes`] to all
 //!   arrays and not just arrays up to length 32 (enabled by default).
+//! - `full_errors`: Some validation algorithms are optimized for speed and do not report full error
+//!   details by default. This feature provides full error information.
 //! - `log`: Logs errors using the `log` crate in `no_std` environments. Does nothing in `std`
 //!   environments.
 //! - `std`: Enables standard library support (enabled by default).
