@@ -10,8 +10,10 @@ repository = "https://github.com/djkoloski/bytecheck"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytecheck = { version = "0.4.1", path = "../bytecheck" }
+bytecheck = { version = "0.4.1", path = "../bytecheck", default-features = false }
 
 [features]
-default = []
+default = ["const_generics", "std"]
 const_generics = ["bytecheck/const_generics"]
+full_errors = ["bytecheck/full_errors"]
+std = ["bytecheck/std"]

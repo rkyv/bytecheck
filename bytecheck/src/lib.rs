@@ -132,7 +132,7 @@ pub trait CheckBytes<C: ?Sized> {
     #[cfg(feature = "std")]
     type Error: Error + 'static;
     #[cfg(not(feature = "std"))]
-    type Error: fmt::Display + 'static;
+    type Error: fmt::Debug + fmt::Display + 'static;
 
     /// Checks whether the given pointer points to a valid value within the
     /// given context.
