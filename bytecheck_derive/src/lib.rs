@@ -165,7 +165,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     let ty = &f.ty;
                     quote_spanned! { ty.span() =>
                         <#ty as CheckBytes<__C>>::check_bytes(
-                            bytes.add(offset_of!(#name #ty_generics, #field)).cast(),
+                            ::core::ptr::addr_of!((*value).#field),
                             context
                         ).map_err(|e| StructCheckError {
                             field_name: stringify!(#field),
@@ -204,7 +204,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     let index = Index::from(i);
                     quote_spanned! { ty.span() =>
                         <#ty as CheckBytes<__C>>::check_bytes(
-                            bytes.add(offset_of!(#name #ty_generics, #index)).cast(),
+                            ::core::ptr::addr_of!((*value).#index),
                             context
                         ).map_err(|e| TupleStructCheckError {
                             field_index: #i,
@@ -361,7 +361,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             let ty = &f.ty;
                             quote! {
                                 <#ty as CheckBytes<__C>>::check_bytes(
-                                    bytes.add(offset_of!(#variant_name #ty_generics, #name)).cast(),
+                                    ::core::ptr::addr_of!((*value).#name),
                                     context
                                 ).map_err(|e| EnumCheckError::InvalidStruct {
                                     variant_name: stringify!(#variant),
@@ -372,7 +372,10 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                 })?;
                             }
                         });
-                        quote_spanned! { variant.span() => #(#checks)* }
+                        quote_spanned! { variant.span() => {
+                            let value = value.cast::<#variant_name #ty_generics>();
+                            #(#checks)*
+                        } }
                     }
                     Fields::Unnamed(ref fields) => {
                         let checks = fields.unnamed.iter().enumerate().map(|(i, f)| {
@@ -380,7 +383,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             let index = Index::from(i + 1);
                             quote! {
                                 <#ty as CheckBytes<__C>>::check_bytes(
-                                    bytes.add(offset_of!(#variant_name #ty_generics, #index)).cast(),
+                                    ::core::ptr::addr_of!((*value).#index),
                                     context
                                 ).map_err(|e| EnumCheckError::InvalidTuple {
                                     variant_name: stringify!(#variant),
@@ -391,9 +394,12 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                 })?;
                             }
                         });
-                        quote_spanned! { name.span() => #(#checks)* }
+                        quote_spanned! { variant.span() => {
+                            let value = value.cast::<#variant_name #ty_generics>();
+                            #(#checks)*
+                        } }
                     }
-                    Fields::Unit => quote_spanned! { name.span() => {} },
+                    Fields::Unit => quote_spanned! { name.span() => (), },
                 }
             });
 
@@ -415,10 +421,9 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     type Error = EnumCheckError<#repr>;
 
                     unsafe fn check_bytes<'a>(value: *const Self, context: &mut __C) -> Result<&'a Self, Self::Error> {
-                        let bytes = value.cast::<u8>();
-                        let tag = *bytes.cast::<#repr>();
+                        let tag = *value.cast::<#repr>();
                         match tag {
-                            #(#tag_variant_values => { #check_arms },)*
+                            #(#tag_variant_values => #check_arms)*
                             _ => return Err(EnumCheckError::InvalidTag(tag)),
                         }
                         Ok(&*value)
@@ -441,7 +446,6 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 CheckBytes,
                 EnumCheckError,
                 handle_error,
-                offset_of,
                 StructCheckError,
                 TupleStructCheckError,
                 Unreachable,

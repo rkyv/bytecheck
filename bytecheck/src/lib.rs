@@ -110,7 +110,7 @@ use core::{
         NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroU128, NonZeroU16,
         NonZeroU32, NonZeroU64, NonZeroU8,
     },
-    ops, slice,
+    ops, ptr, slice,
 };
 use ptr_meta::PtrExt;
 #[cfg(not(feature = "full_errors"))]
@@ -121,7 +121,6 @@ use simdutf8::compat::{from_utf8, Utf8Error};
 use std::error::Error;
 
 pub use bytecheck_derive::CheckBytes;
-pub use memoffset::offset_of;
 
 /// A type that can check whether a pointer points to a valid value.
 ///
@@ -419,8 +418,7 @@ macro_rules! impl_tuple {
             #[inline]
             #[allow(clippy::unneeded_wildcard_pattern)]
             unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
-                let bytes = value.cast::<u8>();
-                let field_bytes = ($(bytes.add(memoffset::offset_of_tuple!(Self, $index)),)+);
+                let field_bytes = ($(ptr::addr_of!((*value).$index),)+);
                 $($type::check_bytes(field_bytes.$index.cast::<$type>(), context).map_err($error::$type)?;)+
                 Ok(&*value)
             }
@@ -697,14 +695,13 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
         value: *const Self,
         context: &mut C,
     ) -> Result<&'a Self, Self::Error> {
-        let bytes = value.cast::<u8>();
-        T::check_bytes(bytes.add(offset_of!(Self, start)).cast(), context).map_err(|error| {
+        T::check_bytes(ptr::addr_of!((*value).start), context).map_err(|error| {
             StructCheckError {
                 field_name: "start",
                 inner: handle_error(error),
             }
         })?;
-        T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
+        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
                 inner: handle_error(error),
@@ -723,7 +720,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
         context: &mut C,
     ) -> Result<&'a Self, Self::Error> {
         let bytes = value.cast::<u8>();
-        T::check_bytes(bytes.add(offset_of!(Self, start)).cast(), context).map_err(|error| {
+        T::check_bytes(ptr::addr_of!((*value).start), context).map_err(|error| {
             StructCheckError {
                 field_name: "start",
                 inner: handle_error(error),
@@ -750,8 +747,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeTo<T> {
         value: *const Self,
         context: &mut C,
     ) -> Result<&'a Self, Self::Error> {
-        let bytes = value.cast::<u8>();
-        T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
+        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
                 inner: handle_error(error),
@@ -769,8 +765,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeToInclusive<T> {
         value: *const Self,
         context: &mut C,
     ) -> Result<&'a Self, Self::Error> {
-        let bytes = value.cast::<u8>();
-        T::check_bytes(bytes.add(offset_of!(Self, end)).cast(), context).map_err(|error| {
+        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
                 inner: handle_error(error),
