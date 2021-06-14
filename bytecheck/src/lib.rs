@@ -117,10 +117,20 @@ use ptr_meta::PtrExt;
 use simdutf8::basic::{from_utf8, Utf8Error};
 #[cfg(feature = "full_errors")]
 use simdutf8::compat::{from_utf8, Utf8Error};
-#[cfg(feature = "std")]
-use std::error::Error;
 
 pub use bytecheck_derive::CheckBytes;
+
+#[cfg(not(feature = "std"))]
+pub trait Error: fmt::Debug + fmt::Display + 'static {}
+
+#[cfg(not(feature = "std"))]
+impl<T: fmt::Debug + fmt::Display + 'static + ?Sized> Error for T {}
+
+#[cfg(feature = "std")]
+pub trait Error: std::error::Error + 'static {}
+
+#[cfg(feature = "std")]
+impl<T: std::error::Error + 'static + ?Sized> Error for T {}
 
 /// A type that can check whether a pointer points to a valid value.
 ///
@@ -128,10 +138,7 @@ pub use bytecheck_derive::CheckBytes;
 /// implemented manually for custom behavior.
 pub trait CheckBytes<C: ?Sized> {
     /// The error that may result from checking the type.
-    #[cfg(feature = "std")]
-    type Error: Error + 'static;
-    #[cfg(not(feature = "std"))]
-    type Error: fmt::Debug + fmt::Display + 'static;
+    type Error: Error;
 
     /// Checks whether the given pointer points to a valid value within the
     /// given context.
@@ -222,7 +229,7 @@ impl fmt::Display for Unreachable {
 }
 
 #[cfg(feature = "std")]
-impl Error for Unreachable {}
+impl std::error::Error for Unreachable {}
 
 macro_rules! impl_primitive {
     ($type:ty) => {
@@ -309,7 +316,7 @@ impl fmt::Display for BoolCheckError {
 }
 
 #[cfg(feature = "std")]
-impl Error for BoolCheckError {}
+impl std::error::Error for BoolCheckError {}
 
 impl<C: ?Sized> CheckBytes<C> for bool {
     type Error = BoolCheckError;
@@ -370,7 +377,7 @@ impl fmt::Display for CharCheckError {
 }
 
 #[cfg(feature = "std")]
-impl Error for CharCheckError {}
+impl std::error::Error for CharCheckError {}
 
 impl<C: ?Sized> CheckBytes<C> for char {
     type Error = CharCheckError;
@@ -410,7 +417,7 @@ macro_rules! impl_tuple {
         }
 
         #[cfg(feature = "std")]
-        impl<$($type: fmt::Display + fmt::Debug),*> Error for $error<$($type),+> {}
+        impl<$($type: fmt::Display + fmt::Debug),*> std::error::Error for $error<$($type),+> {}
 
         impl<$($type: CheckBytes<C>,)+ C: ?Sized> CheckBytes<C> for ($($type,)+) {
             type Error = $error<$($type::Error),+>;
@@ -457,7 +464,7 @@ impl<T: fmt::Display> fmt::Display for ArrayCheckError<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display> Error for ArrayCheckError<T> {}
+impl<T: fmt::Debug + fmt::Display> std::error::Error for ArrayCheckError<T> {}
 
 #[cfg(not(feature = "const_generics"))]
 macro_rules! impl_array {
@@ -525,7 +532,7 @@ impl<T: fmt::Display> fmt::Display for SliceCheckError<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display> Error for SliceCheckError<T> {}
+impl<T: fmt::Debug + fmt::Display> std::error::Error for SliceCheckError<T> {}
 
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T] {
     type Error = SliceCheckError<T::Error>;
@@ -568,9 +575,9 @@ impl fmt::Display for StrCheckError {
 }
 
 #[cfg(feature = "std")]
-impl Error for StrCheckError {
+impl std::error::Error for StrCheckError {
     #[inline]
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             StrCheckError::Utf8Error(e) => Some(e),
         }
@@ -609,7 +616,7 @@ impl fmt::Display for StructCheckError {
 }
 
 #[cfg(feature = "std")]
-impl Error for StructCheckError {}
+impl std::error::Error for StructCheckError {}
 
 /// An error resulting from an invalid tuple struct.
 #[derive(Debug)]
@@ -632,7 +639,7 @@ impl fmt::Display for TupleStructCheckError {
 }
 
 #[cfg(feature = "std")]
-impl Error for TupleStructCheckError {}
+impl std::error::Error for TupleStructCheckError {}
 
 /// An error resulting from an invalid enum.
 #[derive(Debug)]
@@ -684,7 +691,7 @@ impl<T: fmt::Display> fmt::Display for EnumCheckError<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: fmt::Debug + fmt::Display> Error for EnumCheckError<T> {}
+impl<T: fmt::Debug + fmt::Display> std::error::Error for EnumCheckError<T> {}
 
 // Range types
 impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
@@ -799,7 +806,7 @@ impl fmt::Display for NonZeroCheckError {
 }
 
 #[cfg(feature = "std")]
-impl Error for NonZeroCheckError {}
+impl std::error::Error for NonZeroCheckError {}
 
 macro_rules! impl_nonzero {
     ($nonzero:ident, $underlying:ident) => {
