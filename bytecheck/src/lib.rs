@@ -93,16 +93,13 @@
 //! - `std`: Enables standard library support (enabled by default). If the `std` feature is not
 //!   enabled, the `alloc` crate is required.
 
+#![deny(broken_intra_doc_links)]
+#![deny(missing_docs)]
+#![deny(missing_crate_level_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-pub type ErrorBox<E> = alloc::boxed::Box<E>;
-
-#[cfg(feature = "std")]
-pub type ErrorBox<E> = std::boxed::Box<E>;
 
 #[cfg(has_atomics)]
 use core::sync::atomic::{
@@ -128,14 +125,21 @@ use simdutf8::compat::{from_utf8, Utf8Error};
 
 pub use bytecheck_derive::CheckBytes;
 
+/// An error that can be debugged and displayed.
+///
+/// With the `std` feature, this also supports `std::error::Error`.
 #[cfg(not(feature = "std"))]
 pub trait Error: fmt::Debug + fmt::Display + 'static {}
 
 #[cfg(not(feature = "std"))]
 impl<T: fmt::Debug + fmt::Display + 'static> Error for T {}
 
+/// An error that can be debugged and displayed.
+///
+/// With the `std` feature, this also supports `std::error::Error`.
 #[cfg(feature = "std")]
 pub trait Error: std::error::Error + 'static {
+    /// Gets this error as an `std::error::Error`.
     fn as_error(&self) -> &(dyn std::error::Error + 'static);
 }
 
@@ -145,6 +149,14 @@ impl<T: std::error::Error + 'static> Error for T {
         self
     }
 }
+
+/// The type used for boxing errors.
+#[cfg(not(feature = "std"))]
+pub type ErrorBox<E> = alloc::boxed::Box<E>;
+
+/// The type used for boxing errors.
+#[cfg(feature = "std")]
+pub type ErrorBox<E> = std::boxed::Box<E>;
 
 /// A type that can check whether a pointer points to a valid value.
 ///
@@ -354,7 +366,10 @@ macro_rules! impl_tuple {
         /// An error resulting from an invalid tuple.
         #[derive(Debug)]
         pub enum $error<$($type),+> {
-            $($type($type),)+
+            $(
+                /// The given tuple member was invalid.
+                $type($type),
+            )+
         }
 
         impl<$($type: fmt::Display),*> fmt::Display for $error<$($type),+> {

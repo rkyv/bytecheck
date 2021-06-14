@@ -102,7 +102,7 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
 ///
 /// Additional arguments can be specified using the `#[check_bytes(...)]` attribute:
 ///
-/// - `bound(...)`: Adds additional bounds to the `CheckBytes` implementation. This can be
+/// - `bound = "..."`: Adds additional bounds to the `CheckBytes` implementation. This can be
 ///   especially useful when dealing with recursive structures, where bounds may need to be omitted
 ///   to prevent recursive type definitions.
 ///
@@ -111,7 +111,7 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
 /// its own type, as the implementation of `CheckBytes` for a struct depends on each field type
 /// implementing it as well. Adding the attribute `#[omit_bounds]` to a field will suppress this
 /// trait bound and allow recursive structures. This may be too coarse for some types, in which case
-/// additional type bounds may be required with `bound(...)`.
+/// additional type bounds may be required with `bound = "..."`.
 #[proc_macro_derive(CheckBytes, attributes(check_bytes, omit_bounds))]
 pub fn check_bytes_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     match derive_check_bytes(parse_macro_input!(input as DeriveInput)) {
