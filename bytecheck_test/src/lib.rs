@@ -1,3 +1,8 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
 #[cfg(test)]
 mod tests {
     use bytecheck::{CheckBytes, Unreachable};
@@ -378,7 +383,6 @@ mod tests {
     #[test]
     fn test_context() {
         use core::fmt;
-        use std::error;
 
         #[derive(Debug)]
         #[repr(transparent)]
@@ -402,7 +406,8 @@ mod tests {
             }
         }
 
-        impl error::Error for TestError {}
+        #[cfg(feature = "std")]
+        impl std::error::Error for TestError {}
 
         impl From<Unreachable> for TestError {
             fn from(_: Unreachable) -> Self {

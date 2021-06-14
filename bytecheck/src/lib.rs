@@ -86,15 +86,23 @@
 //!
 //! ## Features
 //!
-//! - `const_generics`: Extends the implementations of [`CheckBytes`] to all
-//!   arrays and not just arrays up to length 32 (enabled by default).
-//! - `full_errors`: Some validation algorithms are optimized for speed and do not report full error
+//! - `const_generics`: Extends the implementations of [`CheckBytes`] to all arrays and not just
+//!   arrays up to length 32 (enabled by default).
+//! - `verbose`: Some validation algorithms are optimized for speed and do not report full error
 //!   details by default. This feature provides full error information.
-//! - `log`: Logs errors using the `log` crate in `no_std` environments. Does nothing in `std`
-//!   environments.
-//! - `std`: Enables standard library support (enabled by default).
+//! - `std`: Enables standard library support (enabled by default). If the `std` feature is not
+//!   enabled, the `alloc` crate is required.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+pub type ErrorBox<E> = alloc::boxed::Box<E>;
+
+#[cfg(feature = "std")]
+pub type ErrorBox<E> = std::boxed::Box<E>;
 
 #[cfg(has_atomics)]
 use core::sync::atomic::{
@@ -113,9 +121,9 @@ use core::{
     ops, ptr, slice,
 };
 use ptr_meta::PtrExt;
-#[cfg(not(feature = "full_errors"))]
+#[cfg(not(feature = "verbose"))]
 use simdutf8::basic::{from_utf8, Utf8Error};
-#[cfg(feature = "full_errors")]
+#[cfg(feature = "verbose")]
 use simdutf8::compat::{from_utf8, Utf8Error};
 
 pub use bytecheck_derive::CheckBytes;
@@ -124,13 +132,19 @@ pub use bytecheck_derive::CheckBytes;
 pub trait Error: fmt::Debug + fmt::Display + 'static {}
 
 #[cfg(not(feature = "std"))]
-impl<T: fmt::Debug + fmt::Display + 'static + ?Sized> Error for T {}
+impl<T: fmt::Debug + fmt::Display + 'static> Error for T {}
 
 #[cfg(feature = "std")]
-pub trait Error: std::error::Error + 'static {}
+pub trait Error: std::error::Error + 'static {
+    fn as_error(&self) -> &(dyn std::error::Error + 'static);
+}
 
 #[cfg(feature = "std")]
-impl<T: std::error::Error + 'static + ?Sized> Error for T {}
+impl<T: std::error::Error + 'static> Error for T {
+    fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+        self
+    }
+}
 
 /// A type that can check whether a pointer points to a valid value.
 ///
@@ -138,7 +152,7 @@ impl<T: std::error::Error + 'static + ?Sized> Error for T {}
 /// implemented manually for custom behavior.
 pub trait CheckBytes<C: ?Sized> {
     /// The error that may result from checking the type.
-    type Error: Error;
+    type Error: Error + 'static;
 
     /// Checks whether the given pointer points to a valid value within the
     /// given context.
@@ -149,69 +163,6 @@ pub trait CheckBytes<C: ?Sized> {
     /// represent the type.
     unsafe fn check_bytes<'a>(value: *const Self, context: &mut C)
         -> Result<&'a Self, Self::Error>;
-}
-
-// std error handling
-
-/// The type of nested errors
-#[cfg(feature = "std")]
-pub type NestedError = Box<dyn Error>;
-
-/// Nests errors according to user configuration
-#[cfg(feature = "std")]
-#[inline]
-pub fn handle_error<E: Error + 'static>(error: E) -> NestedError {
-    Box::new(error)
-}
-
-// no_std error handling
-
-/// An error type that reminds users to enable logging
-#[derive(Debug)]
-pub struct EnableLoggingError;
-
-impl fmt::Display for EnableLoggingError {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "enable the `log` feature in bytecheck to log errors")
-    }
-}
-
-// logless error handling
-
-/// The type of nested errors
-#[cfg(all(not(feature = "std"), not(feature = "log")))]
-pub type NestedError = EnableLoggingError;
-
-/// Nests errors according to user configuration
-#[cfg(all(not(feature = "std"), not(feature = "log")))]
-#[inline]
-pub fn handle_error<E>(_: E) -> NestedError {
-    EnableLoggingError
-}
-
-/// An error type that reminds users to check the logs
-#[derive(Debug)]
-pub struct CheckLogsError;
-
-impl fmt::Display for CheckLogsError {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "see logs")
-    }
-}
-
-// logging error handling
-
-/// The type of nested errors
-#[cfg(all(not(feature = "std"), feature = "log"))]
-pub type NestedError = CheckLogsError;
-
-/// Nests errors according to user configuration
-#[cfg(all(not(feature = "std"), feature = "log"))]
-pub fn handle_error<E: Display>(error: E) -> NestedError {
-    log::error!("[bytecheck] {}", error);
-    CheckLogsError
 }
 
 /// An error that cannot be produced
@@ -601,7 +552,7 @@ pub struct StructCheckError {
     /// The name of the struct field that was invalid
     pub field_name: &'static str,
     /// The error that occurred while validating the field
-    pub inner: NestedError,
+    pub inner: ErrorBox<dyn Error>,
 }
 
 impl fmt::Display for StructCheckError {
@@ -624,7 +575,7 @@ pub struct TupleStructCheckError {
     /// The index of the struct field that was invalid
     pub field_index: usize,
     /// The error that occurred while validating the field
-    pub inner: NestedError,
+    pub inner: ErrorBox<dyn Error>,
 }
 
 impl fmt::Display for TupleStructCheckError {
@@ -705,13 +656,13 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
         T::check_bytes(ptr::addr_of!((*value).start), context).map_err(|error| {
             StructCheckError {
                 field_name: "start",
-                inner: handle_error(error),
+                inner: ErrorBox::new(error),
             }
         })?;
         T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
-                inner: handle_error(error),
+                inner: ErrorBox::new(error),
             }
         })?;
         Ok(&*value)
@@ -730,7 +681,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
         T::check_bytes(ptr::addr_of!((*value).start), context).map_err(|error| {
             StructCheckError {
                 field_name: "start",
-                inner: handle_error(error),
+                inner: ErrorBox::new(error),
             }
         })?;
         Ok(&*bytes.cast())
@@ -757,7 +708,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeTo<T> {
         T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
-                inner: handle_error(error),
+                inner: ErrorBox::new(error),
             }
         })?;
         Ok(&*value)
@@ -775,7 +726,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeToInclusive<T> {
         T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
             StructCheckError {
                 field_name: "end",
-                inner: handle_error(error),
+                inner: ErrorBox::new(error),
             }
         })?;
         Ok(&*value)

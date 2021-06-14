@@ -169,7 +169,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             context
                         ).map_err(|e| StructCheckError {
                             field_name: stringify!(#field),
-                            inner: handle_error(e),
+                            inner: ErrorBox::new(e),
                         })?;
                     }
                 });
@@ -208,7 +208,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             context
                         ).map_err(|e| TupleStructCheckError {
                             field_index: #i,
-                            inner: handle_error(e),
+                            inner: ErrorBox::new(e),
                         })?;
                     }
                 });
@@ -367,7 +367,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                     variant_name: stringify!(#variant),
                                     inner: StructCheckError {
                                         field_name: stringify!(#name),
-                                        inner: handle_error(e),
+                                        inner: ErrorBox::new(e),
                                     },
                                 })?;
                             }
@@ -389,7 +389,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                     variant_name: stringify!(#variant),
                                     inner: TupleStructCheckError {
                                         field_index: #i,
-                                        inner: handle_error(e),
+                                        inner: ErrorBox::new(e),
                                     },
                                 })?;
                             }
@@ -445,7 +445,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             use bytecheck::{
                 CheckBytes,
                 EnumCheckError,
-                handle_error,
+                ErrorBox,
                 StructCheckError,
                 TupleStructCheckError,
                 Unreachable,

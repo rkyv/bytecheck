@@ -15,5 +15,5 @@ bytecheck = { version = "0.5", path = "../bytecheck", default-features = false }
 [features]
 default = ["const_generics", "std"]
 const_generics = ["bytecheck/const_generics"]
-full_errors = ["bytecheck/full_errors"]
+verbose = ["bytecheck/verbose"]
 std = ["bytecheck/std"]
