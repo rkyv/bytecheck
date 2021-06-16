@@ -228,7 +228,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             Fields::Unit => {
                 quote! {
                     impl #impl_generics CheckBytes<__C> for #name #ty_generics #impl_where_clause {
-                        type Error = Unreachable;
+                        type Error = Infallible;
 
                         unsafe fn check_bytes<'a>(value: *const Self, context: &mut __C) -> Result<&'a Self, Self::Error> {
                             Ok(&*value)
@@ -441,14 +441,13 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
     Ok(quote! {
         const _: () = {
-            use core::marker::PhantomData;
+            use core::{convert::Infallible, marker::PhantomData};
             use bytecheck::{
                 CheckBytes,
                 EnumCheckError,
                 ErrorBox,
                 StructCheckError,
                 TupleStructCheckError,
-                Unreachable,
             };
 
             #check_bytes_impl

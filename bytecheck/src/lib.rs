@@ -108,7 +108,7 @@ use core::sync::atomic::{
 #[cfg(has_atomics_64)]
 use core::sync::atomic::{AtomicI64, AtomicU64};
 use core::{
-    convert::TryFrom,
+    convert::{Infallible, TryFrom},
     fmt,
     marker::{PhantomData, PhantomPinned},
     num::{
@@ -177,27 +177,10 @@ pub trait CheckBytes<C: ?Sized> {
         -> Result<&'a Self, Self::Error>;
 }
 
-/// An error that cannot be produced
-///
-/// This is used primarily for primitive types that do not have invalid values
-/// such as integers and floats.
-#[derive(Debug)]
-pub enum Unreachable {}
-
-impl fmt::Display for Unreachable {
-    #[inline]
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        unsafe { core::hint::unreachable_unchecked() }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for Unreachable {}
-
 macro_rules! impl_primitive {
     ($type:ty) => {
         impl<C: ?Sized> CheckBytes<C> for $type {
-            type Error = Unreachable;
+            type Error = Infallible;
 
             #[inline]
             unsafe fn check_bytes<'a>(
@@ -241,7 +224,7 @@ impl_primitive!(AtomicU32);
 impl_primitive!(AtomicU64);
 
 impl<T: ?Sized, C: ?Sized> CheckBytes<C> for PhantomData<T> {
-    type Error = Unreachable;
+    type Error = Infallible;
 
     #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
@@ -250,7 +233,7 @@ impl<T: ?Sized, C: ?Sized> CheckBytes<C> for PhantomData<T> {
 }
 
 impl<C: ?Sized> CheckBytes<C> for PhantomPinned {
-    type Error = Unreachable;
+    type Error = Infallible;
 
     #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
@@ -322,9 +305,9 @@ pub struct CharCheckError {
     pub invalid_value: u32,
 }
 
-impl From<Unreachable> for CharCheckError {
+impl From<Infallible> for CharCheckError {
     #[inline]
-    fn from(_: Unreachable) -> Self {
+    fn from(_: Infallible) -> Self {
         unsafe { core::hint::unreachable_unchecked() }
     }
 }
@@ -704,7 +687,7 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeFrom<T> {
 }
 
 impl<C: ?Sized> CheckBytes<C> for ops::RangeFull {
-    type Error = Unreachable;
+    type Error = Infallible;
 
     #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
@@ -755,9 +738,9 @@ pub enum NonZeroCheckError {
     IsZero,
 }
 
-impl From<Unreachable> for NonZeroCheckError {
+impl From<Infallible> for NonZeroCheckError {
     #[inline]
-    fn from(_: Unreachable) -> Self {
+    fn from(_: Infallible) -> Self {
         unsafe { core::hint::unreachable_unchecked() }
     }
 }

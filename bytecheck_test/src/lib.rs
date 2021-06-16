@@ -5,7 +5,7 @@ extern crate alloc;
 
 #[cfg(test)]
 mod tests {
-    use bytecheck::{CheckBytes, Unreachable};
+    use bytecheck::CheckBytes;
 
     fn check_as_bytes<T: CheckBytes<C>, C>(value: &T, mut context: C) {
         unsafe { T::check_bytes(value as *const T, &mut context).unwrap() };
@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn test_context() {
-        use core::fmt;
+        use core::{convert::Infallible, fmt};
 
         #[derive(Debug)]
         #[repr(transparent)]
@@ -409,9 +409,9 @@ mod tests {
         #[cfg(feature = "std")]
         impl std::error::Error for TestError {}
 
-        impl From<Unreachable> for TestError {
-            fn from(_: Unreachable) -> Self {
-                unreachable!();
+        impl From<Infallible> for TestError {
+            fn from(_: Infallible) -> Self {
+                unsafe { core::hint::unreachable_unchecked() }
             }
         }
 
