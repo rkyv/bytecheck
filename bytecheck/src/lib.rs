@@ -92,6 +92,17 @@
 //!   details by default. This feature provides full error information.
 //! - `std`: Enables standard library support (enabled by default). If the `std` feature is not
 //!   enabled, the `alloc` crate is required.
+//!
+//! ## Crate support
+//!
+//! Some common crates need to be supported by bytecheck before an official integration has been
+//! made. Support is provided by bytecheck for these crates, but in the future crates should depend
+//! on bytecheck and provide their own implementations. The crates that already have support
+//! provided by bytecheck should work toward integrating the implementations into themselves.
+//!
+//! Crates supported by bytecheck:
+//!
+//! - [`uuid`](https://docs.rs/uuid)
 
 #![deny(broken_intra_doc_links)]
 #![deny(missing_docs)]
@@ -100,6 +111,16 @@
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
+
+// Support for various common crates. These are primarily to get users off the ground and build some
+// momentum.
+
+// These are NOT PLANNED to remain in bytecheck for the final release. Much like serde, these
+// implementations should be moved into their respective crates over time. Before adding support for
+// another crate, please consider getting bytecheck support in the crate instead.
+
+#[cfg(feature = "uuid")]
+pub mod uuid;
 
 #[cfg(has_atomics)]
 use core::sync::atomic::{

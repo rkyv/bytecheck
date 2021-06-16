@@ -18,6 +18,15 @@ bytecheck_derive = { version = "=0.5.2", path = "../bytecheck_derive", default-f
 ptr_meta = "0.1"
 simdutf8 = { version = "0.1", default-features = false }
 
+# Support for various common crates. These are primarily to get users off the ground and build some
+# momentum.
+
+# These are NOT PLANNED to remain in bytecheck for the final release. Much like serde, these
+# implementations should be moved into their respective crates over time. Before adding support for
+# another crate, please consider getting bytecheck support in the crate instead.
+
+uuid = { version = "0.8", optional = true }
+
 [features]
 default = ["const_generics", "std"]
 const_generics = []
