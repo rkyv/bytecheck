@@ -1,6 +1,6 @@
 [package]
 name = "bytecheck_test"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
 description = "Test suite for bytecheck crates"
@@ -10,10 +10,9 @@ repository = "https://github.com/djkoloski/bytecheck"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytecheck = { version = "0.5", path = "../bytecheck", default-features = false }
+bytecheck = { version = "0.6", path = "../bytecheck", default-features = false }
 
 [features]
-default = ["const_generics", "std"]
-const_generics = ["bytecheck/const_generics"]
+default = ["std"]
 verbose = ["bytecheck/verbose"]
 std = ["bytecheck/std"]

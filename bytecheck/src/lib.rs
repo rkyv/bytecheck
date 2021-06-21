@@ -86,8 +86,6 @@
 //!
 //! ## Features
 //!
-//! - `const_generics`: Extends the implementations of [`CheckBytes`] to all arrays and not just
-//!   arrays up to length 32 (enabled by default).
 //! - `verbose`: Some validation algorithms are optimized for speed and do not report full error
 //!   details by default. This feature provides full error information.
 //! - `std`: Enables standard library support (enabled by default). If the `std` feature is not
@@ -436,32 +434,6 @@ impl<T: fmt::Display> fmt::Display for ArrayCheckError<T> {
 #[cfg(feature = "std")]
 impl<T: fmt::Debug + fmt::Display> std::error::Error for ArrayCheckError<T> {}
 
-#[cfg(not(feature = "const_generics"))]
-macro_rules! impl_array {
-    () => {};
-    ($len:expr, $($rest:expr,)*) => {
-        impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for [T; $len] {
-            type Error = ArrayCheckError<T::Error>;
-
-            #[inline]
-            unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
-                #[allow(clippy::reversed_empty_ranges)]
-                for index in 0..$len {
-                    let el = value.cast::<T>().add(index);
-                    T::check_bytes(el, context).map_err(|error| ArrayCheckError { index, error })?;
-                }
-                Ok(&*value)
-            }
-        }
-
-        impl_array! { $($rest,)* }
-    };
-}
-
-#[cfg(not(feature = "const_generics"))]
-impl_array! { 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, }
-
-#[cfg(feature = "const_generics")]
 impl<T: CheckBytes<C>, C: ?Sized, const N: usize> CheckBytes<C> for [T; N] {
     type Error = ArrayCheckError<T::Error>;
 
