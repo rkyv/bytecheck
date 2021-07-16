@@ -16,7 +16,7 @@ readme = "crates-io.md"
 [dependencies]
 bytecheck_derive = { version = "=0.6.2", path = "../bytecheck_derive", default-features = false }
 ptr_meta = "0.1"
-simdutf8 = { version = "0.1", default-features = false }
+# simdutf8 = { version = "0.1", default-features = false }
 
 # Support for various common crates. These are primarily to get users off the ground and build some
 # momentum.
@@ -30,4 +30,5 @@ uuid = { version = "0.8", optional = true }
 [features]
 default = ["std"]
 verbose = []
-std = ["bytecheck_derive/std", "simdutf8/std"]
+# std = ["bytecheck_derive/std", "simdutf8/std"]
+std = ["bytecheck_derive/std"]
