@@ -137,9 +137,11 @@ use core::{
     ops, ptr, slice,
 };
 use ptr_meta::PtrExt;
-#[cfg(not(feature = "verbose"))]
+#[cfg(not(feature = "simdutf8"))]
+use core::str::{from_utf8, Utf8Error};
+#[cfg(all(feature = "simdutf8", not(feature = "verbose")))]
 use simdutf8::basic::{from_utf8, Utf8Error};
-#[cfg(feature = "verbose")]
+#[cfg(all(feature = "simdutf8", feature = "verbose"))]
 use simdutf8::compat::{from_utf8, Utf8Error};
 
 pub use bytecheck_derive::CheckBytes;
