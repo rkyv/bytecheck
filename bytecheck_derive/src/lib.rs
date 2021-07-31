@@ -441,7 +441,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
     Ok(quote! {
         const _: () = {
-            use core::{convert::Infallible, marker::PhantomData};
+            use ::core::{convert::Infallible, marker::PhantomData};
             use bytecheck::{
                 CheckBytes,
                 EnumCheckError,
