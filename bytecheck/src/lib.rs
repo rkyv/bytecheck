@@ -116,6 +116,14 @@
 #![deny(broken_intra_doc_links)]
 #![deny(missing_docs)]
 #![deny(missing_crate_level_docs)]
+#![deny(
+    rust_2018_compatibility,
+    rust_2018_idioms,
+    future_incompatible,
+    nonstandard_style,
+    unused,
+    clippy::all
+)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]
@@ -131,6 +139,8 @@ extern crate alloc;
 #[cfg(feature = "uuid")]
 pub mod uuid;
 
+#[cfg(not(feature = "simdutf8"))]
+use core::str::{from_utf8, Utf8Error};
 #[cfg(has_atomics)]
 use core::sync::atomic::{
     AtomicBool, AtomicI16, AtomicI32, AtomicI8, AtomicU16, AtomicU32, AtomicU8,
@@ -148,8 +158,6 @@ use core::{
     ops, ptr, slice,
 };
 use ptr_meta::PtrExt;
-#[cfg(not(feature = "simdutf8"))]
-use core::str::{from_utf8, Utf8Error};
 #[cfg(all(feature = "simdutf8", not(feature = "verbose")))]
 use simdutf8::basic::{from_utf8, Utf8Error};
 #[cfg(all(feature = "simdutf8", feature = "verbose"))]
@@ -663,11 +671,9 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::Range<T> {
                 inner: ErrorBox::new(error),
             }
         })?;
-        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
-            StructCheckError {
-                field_name: "end",
-                inner: ErrorBox::new(error),
-            }
+        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| StructCheckError {
+            field_name: "end",
+            inner: ErrorBox::new(error),
         })?;
         Ok(&*value)
     }
@@ -709,11 +715,9 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeTo<T> {
         value: *const Self,
         context: &mut C,
     ) -> Result<&'a Self, Self::Error> {
-        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
-            StructCheckError {
-                field_name: "end",
-                inner: ErrorBox::new(error),
-            }
+        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| StructCheckError {
+            field_name: "end",
+            inner: ErrorBox::new(error),
         })?;
         Ok(&*value)
     }
@@ -727,11 +731,9 @@ impl<T: CheckBytes<C>, C: ?Sized> CheckBytes<C> for ops::RangeToInclusive<T> {
         value: *const Self,
         context: &mut C,
     ) -> Result<&'a Self, Self::Error> {
-        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| {
-            StructCheckError {
-                field_name: "end",
-                inner: ErrorBox::new(error),
-            }
+        T::check_bytes(ptr::addr_of!((*value).end), context).map_err(|error| StructCheckError {
+            field_name: "end",
+            inner: ErrorBox::new(error),
         })?;
         Ok(&*value)
     }

@@ -1,6 +1,13 @@
 //! Procedural macros for bytecheck.
 
-extern crate proc_macro;
+#![deny(
+    rust_2018_compatibility,
+    rust_2018_idioms,
+    future_incompatible,
+    nonstandard_style,
+    unused,
+    clippy::all
+)]
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
