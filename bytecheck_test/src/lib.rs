@@ -1,3 +1,11 @@
+#![deny(
+    rust_2018_compatibility,
+    rust_2018_idioms,
+    future_incompatible,
+    nonstandard_style,
+    unused,
+    clippy::all
+)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]
@@ -34,7 +42,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -42,7 +51,8 @@ mod tests {
                 bytes![
                     42u8, 16u8, 20u8, 3u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -50,7 +60,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0xd8u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -58,7 +69,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0x00u8, 0x11u8, 0u8,
                     255u8, 255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -66,7 +78,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -74,7 +87,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -118,7 +132,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -126,7 +141,8 @@ mod tests {
                 bytes![
                     42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -134,7 +150,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -142,7 +159,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -150,7 +168,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -158,7 +177,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -188,7 +208,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -196,7 +217,8 @@ mod tests {
                 bytes![
                     42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -204,7 +226,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -212,7 +235,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -220,7 +244,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -228,7 +253,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -307,7 +333,8 @@ mod tests {
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8,
                     0u8, 0u8, 0u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -315,7 +342,8 @@ mod tests {
                 bytes![
                     1u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8,
                     0u8, 0u8, 0u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -323,7 +351,8 @@ mod tests {
                 bytes![
                     2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 25u8, 255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap();
@@ -331,7 +360,8 @@ mod tests {
                 bytes![
                     3u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 25u8, 255u8, 255u8, 255u8,
-                ].cast(),
+                ]
+                .cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -419,16 +449,9 @@ mod tests {
         }
 
         unsafe {
-            Test::check_bytes(
-                bytes![42u8, 0u8, 0u8, 0u8].cast(),
-                &mut TestContext(42),
-            )
-            .unwrap();
-            Test::check_bytes(
-                bytes![41u8, 0u8, 0u8, 0u8].cast(),
-                &mut TestContext(42),
-            )
-            .unwrap_err();
+            Test::check_bytes(bytes![42u8, 0u8, 0u8, 0u8].cast(), &mut TestContext(42)).unwrap();
+            Test::check_bytes(bytes![41u8, 0u8, 0u8, 0u8].cast(), &mut TestContext(42))
+                .unwrap_err();
         }
 
         #[repr(transparent)]
@@ -436,16 +459,10 @@ mod tests {
         struct TestContainer(Test);
 
         unsafe {
-            TestContainer::check_bytes(
-                bytes![42u8, 0u8, 0u8, 0u8].cast(),
-                &mut TestContext(42),
-            )
-            .unwrap();
-            TestContainer::check_bytes(
-                bytes![41u8, 0u8, 0u8, 0u8].cast(),
-                &mut TestContext(42),
-            )
-            .unwrap_err();
+            TestContainer::check_bytes(bytes![42u8, 0u8, 0u8, 0u8].cast(), &mut TestContext(42))
+                .unwrap();
+            TestContainer::check_bytes(bytes![41u8, 0u8, 0u8, 0u8].cast(), &mut TestContext(42))
+                .unwrap_err();
         }
     }
 

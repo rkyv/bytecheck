@@ -6,7 +6,10 @@ use uuid::{Bytes, Uuid};
 impl<C: ?Sized> CheckBytes<C> for Uuid {
     type Error = <Bytes as CheckBytes<C>>::Error;
 
-    unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
+    unsafe fn check_bytes<'a>(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<&'a Self, Self::Error> {
         // Safety: cast is OK because Uuid is repr(transparent)
         Bytes::check_bytes(value.cast(), context)?;
         Ok(&*value)
@@ -25,8 +28,7 @@ mod bytecheck_tests {
 
         // Safety: the pointer is aligned and points to enough bytes to represent a Uuid
         unsafe {
-            Uuid::check_bytes(&u as *const Uuid, &mut ())
-                .expect("failed to check uuid");
+            Uuid::check_bytes(&u as *const Uuid, &mut ()).expect("failed to check uuid");
         }
     }
 }
