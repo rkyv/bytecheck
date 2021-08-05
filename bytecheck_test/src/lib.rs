@@ -11,6 +11,18 @@ mod tests {
         unsafe { T::check_bytes(value as *const T, &mut context).unwrap() };
     }
 
+    #[repr(C, align(16))]
+    struct Aligned<const N: usize>([u8; N]);
+
+    macro_rules! bytes {
+        ($($byte:literal,)*) => {
+            (&Aligned([$($byte,)*]).0 as &[u8]).as_ptr()
+        };
+        ($($byte:literal),*) => {
+            bytes!($($byte,)*)
+        };
+    }
+
     #[test]
     fn test_tuples() {
         check_as_bytes(&(42u32, true, 'x'), &mut ());
@@ -19,56 +31,50 @@ mod tests {
         unsafe {
             // These tests assume the tuple is packed (u32, bool, char)
             <(u32, bool, char)>::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             <(u32, bool, char)>::check_bytes(
-                (&[
+                bytes![
                     42u8, 16u8, 20u8, 3u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             <(u32, bool, char)>::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0xd8u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
             <(u32, bool, char)>::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0x00u8, 0x11u8, 0u8,
                     255u8, 255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
             <(u32, bool, char)>::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             <(u32, bool, char)>::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -81,15 +87,11 @@ mod tests {
         check_as_bytes(&[false, true], &mut ());
 
         unsafe {
-            <[bool; 4]>::check_bytes((&[1u8, 0u8, 1u8, 0u8] as *const u8).cast(), &mut ()).unwrap();
-            <[bool; 4]>::check_bytes((&[1u8, 2u8, 1u8, 0u8] as *const u8).cast(), &mut ())
-                .unwrap_err();
-            <[bool; 4]>::check_bytes((&[2u8, 0u8, 1u8, 0u8] as *const u8).cast(), &mut ())
-                .unwrap_err();
-            <[bool; 4]>::check_bytes((&[1u8, 0u8, 1u8, 2u8] as *const u8).cast(), &mut ())
-                .unwrap_err();
-            <[bool; 4]>::check_bytes((&[1u8, 0u8, 1u8, 0u8, 2u8] as *const u8).cast(), &mut ())
-                .unwrap();
+            <[bool; 4]>::check_bytes(bytes![1u8, 0u8, 1u8, 0u8].cast(), &mut ()).unwrap();
+            <[bool; 4]>::check_bytes(bytes![1u8, 2u8, 1u8, 0u8].cast(), &mut ()).unwrap_err();
+            <[bool; 4]>::check_bytes(bytes![2u8, 0u8, 1u8, 0u8].cast(), &mut ()).unwrap_err();
+            <[bool; 4]>::check_bytes(bytes![1u8, 0u8, 1u8, 2u8].cast(), &mut ()).unwrap_err();
+            <[bool; 4]>::check_bytes(bytes![1u8, 0u8, 1u8, 0u8, 2u8].cast(), &mut ()).unwrap();
         }
     }
 
@@ -113,56 +115,50 @@ mod tests {
         unsafe {
             // These tests assume the struct is packed (u32, char, bool)
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -189,56 +185,50 @@ mod tests {
         unsafe {
             // These tests assume the struct is packed (u32, char, bool)
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -259,22 +249,22 @@ mod tests {
 
         unsafe {
             Test::<bool>::check_bytes(
-                (&[0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8] as *const u8).cast(),
+                bytes![0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8].cast(),
                 &mut (),
             )
             .unwrap();
             Test::<bool>::check_bytes(
-                (&[12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8] as *const u8).cast(),
+                bytes![12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8].cast(),
                 &mut (),
             )
             .unwrap();
             Test::<bool>::check_bytes(
-                (&[0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8] as *const u8).cast(),
+                bytes![0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8].cast(),
                 &mut (),
             )
             .unwrap();
             Test::<bool>::check_bytes(
-                (&[0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8] as *const u8).cast(),
+                bytes![0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8].cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -314,38 +304,34 @@ mod tests {
 
         unsafe {
             Test::check_bytes(
-                (&[
+                bytes![
                     0u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8,
                     0u8, 0u8, 0u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     1u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8, 120u8,
                     0u8, 0u8, 0u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 25u8, 255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap();
             Test::check_bytes(
-                (&[
+                bytes![
                     3u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 25u8, 255u8, 255u8, 255u8,
-                ] as *const u8)
-                    .cast(),
+                ].cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -371,12 +357,12 @@ mod tests {
         check_as_bytes(&Test::E, &mut ());
 
         unsafe {
-            Test::check_bytes((&[1u8] as *const u8).cast(), &mut ()).unwrap_err();
-            Test::check_bytes((&[99u8] as *const u8).cast(), &mut ()).unwrap_err();
-            Test::check_bytes((&[102u8] as *const u8).cast(), &mut ()).unwrap_err();
-            Test::check_bytes((&[199u8] as *const u8).cast(), &mut ()).unwrap_err();
-            Test::check_bytes((&[202u8] as *const u8).cast(), &mut ()).unwrap_err();
-            Test::check_bytes((&[255u8] as *const u8).cast(), &mut ()).unwrap_err();
+            Test::check_bytes(bytes![1u8].cast(), &mut ()).unwrap_err();
+            Test::check_bytes(bytes![99u8].cast(), &mut ()).unwrap_err();
+            Test::check_bytes(bytes![102u8].cast(), &mut ()).unwrap_err();
+            Test::check_bytes(bytes![199u8].cast(), &mut ()).unwrap_err();
+            Test::check_bytes(bytes![202u8].cast(), &mut ()).unwrap_err();
+            Test::check_bytes(bytes![255u8].cast(), &mut ()).unwrap_err();
         }
     }
 
@@ -434,12 +420,12 @@ mod tests {
 
         unsafe {
             Test::check_bytes(
-                (&[42u8, 0u8, 0u8, 0u8] as *const u8).cast(),
+                bytes![42u8, 0u8, 0u8, 0u8].cast(),
                 &mut TestContext(42),
             )
             .unwrap();
             Test::check_bytes(
-                (&[41u8, 0u8, 0u8, 0u8] as *const u8).cast(),
+                bytes![41u8, 0u8, 0u8, 0u8].cast(),
                 &mut TestContext(42),
             )
             .unwrap_err();
@@ -451,12 +437,12 @@ mod tests {
 
         unsafe {
             TestContainer::check_bytes(
-                (&[42u8, 0u8, 0u8, 0u8] as *const u8).cast(),
+                bytes![42u8, 0u8, 0u8, 0u8].cast(),
                 &mut TestContext(42),
             )
             .unwrap();
             TestContainer::check_bytes(
-                (&[41u8, 0u8, 0u8, 0u8] as *const u8).cast(),
+                bytes![41u8, 0u8, 0u8, 0u8].cast(),
                 &mut TestContext(42),
             )
             .unwrap_err();
