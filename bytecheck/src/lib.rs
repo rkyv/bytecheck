@@ -42,6 +42,8 @@
 //! }
 //!
 //! // This type is laid out as (u32, char, bool)
+//! // In this example, the architecture is assumed to be little-endian
+//! # #[cfg(target_endian = "little")]
 //! unsafe {
 //!     // These are valid bytes for (0, 'x', true)
 //!     Test::check_bytes(
@@ -113,10 +115,10 @@
 //!
 //! - [`uuid`](https://docs.rs/uuid)
 
-#![deny(broken_intra_doc_links)]
-#![deny(missing_docs)]
-#![deny(missing_crate_level_docs)]
 #![deny(
+    broken_intra_doc_links,
+    missing_crate_level_docs,
+    missing_docs,
     rust_2018_compatibility,
     rust_2018_idioms,
     future_incompatible,

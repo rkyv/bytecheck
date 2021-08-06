@@ -15,6 +15,45 @@ extern crate alloc;
 mod tests {
     use bytecheck::CheckBytes;
 
+    #[derive(Debug)]
+    #[repr(transparent)]
+    struct CharLE(u32);
+
+    impl From<char> for CharLE {
+        fn from(c: char) -> Self {
+            #[cfg(target_endian = "little")]
+            {
+                Self(c as u32)
+            }
+            #[cfg(target_endian = "big")]
+            {
+                Self((c as u32).swap_bytes())
+            }
+        }
+    }
+
+    impl<C: ?Sized> CheckBytes<C> for CharLE {
+        type Error = <char as CheckBytes<C>>::Error;
+
+        unsafe fn check_bytes<'a>(
+            value: *const Self,
+            context: &mut C,
+        ) -> Result<&'a Self, Self::Error> {
+            #[cfg(target_endian = "little")]
+            {
+                char::check_bytes(value.cast(), context)?;
+                Ok(&*value.cast())
+            }
+            #[cfg(target_endian = "big")]
+            {
+                let mut bytes = *value.cast::<[u8; 4]>();
+                bytes.reverse();
+                char::check_bytes(bytes.as_ref().as_ptr().cast(), context)?;
+                Ok(&*value.cast())
+            }
+        }
+    }
+
     fn check_as_bytes<T: CheckBytes<C>, C>(value: &T, mut context: C) {
         unsafe { T::check_bytes(value as *const T, &mut context).unwrap() };
     }
@@ -38,7 +77,7 @@ mod tests {
 
         unsafe {
             // These tests assume the tuple is packed (u32, bool, char)
-            <(u32, bool, char)>::check_bytes(
+            <(u32, bool, CharLE)>::check_bytes(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
@@ -47,7 +86,7 @@ mod tests {
                 &mut (),
             )
             .unwrap();
-            <(u32, bool, char)>::check_bytes(
+            <(u32, bool, CharLE)>::check_bytes(
                 bytes![
                     42u8, 16u8, 20u8, 3u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
@@ -56,7 +95,7 @@ mod tests {
                 &mut (),
             )
             .unwrap();
-            <(u32, bool, char)>::check_bytes(
+            <(u32, bool, CharLE)>::check_bytes(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0xd8u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
@@ -65,7 +104,7 @@ mod tests {
                 &mut (),
             )
             .unwrap_err();
-            <(u32, bool, char)>::check_bytes(
+            <(u32, bool, CharLE)>::check_bytes(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8, 0x00u8, 0x11u8, 0u8,
                     255u8, 255u8, 255u8, 255u8,
@@ -74,7 +113,7 @@ mod tests {
                 &mut (),
             )
             .unwrap_err();
-            <(u32, bool, char)>::check_bytes(
+            <(u32, bool, CharLE)>::check_bytes(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
@@ -83,7 +122,7 @@ mod tests {
                 &mut (),
             )
             .unwrap();
-            <(u32, bool, char)>::check_bytes(
+            <(u32, bool, CharLE)>::check_bytes(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0x78u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8,
@@ -120,9 +159,9 @@ mod tests {
     #[test]
     fn test_tuple_struct() {
         #[derive(CheckBytes, Debug)]
-        struct Test(u32, bool, char);
+        struct Test(u32, bool, CharLE);
 
-        let value = Test(42, true, 'x');
+        let value = Test(42, true, 'x'.into());
 
         check_as_bytes(&value, &mut ());
 
@@ -191,13 +230,13 @@ mod tests {
         struct Test {
             a: u32,
             b: bool,
-            c: char,
+            c: CharLE,
         }
 
         let value = Test {
             a: 42,
             b: true,
-            c: 'x',
+            c: 'x'.into(),
         };
 
         check_as_bytes(&value, &mut ());
@@ -275,22 +314,22 @@ mod tests {
 
         unsafe {
             Test::<bool>::check_bytes(
-                bytes![0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8].cast(),
+                bytes![0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8,].cast(),
                 &mut (),
             )
             .unwrap();
             Test::<bool>::check_bytes(
-                bytes![12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8].cast(),
+                bytes![12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8,].cast(),
                 &mut (),
             )
             .unwrap();
             Test::<bool>::check_bytes(
-                bytes![0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8].cast(),
+                bytes![0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8,].cast(),
                 &mut (),
             )
             .unwrap();
             Test::<bool>::check_bytes(
-                bytes![0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8].cast(),
+                bytes![0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8,].cast(),
                 &mut (),
             )
             .unwrap_err();
@@ -302,24 +341,24 @@ mod tests {
         #[derive(CheckBytes, Debug)]
         #[repr(u8)]
         enum Test {
-            A(u32, bool, char),
+            A(u32, bool, CharLE),
             #[allow(dead_code)]
             B {
                 a: u32,
                 b: bool,
-                c: char,
+                c: CharLE,
             },
             C,
         }
 
-        let value = Test::A(42, true, 'x');
+        let value = Test::A(42, true, 'x'.into());
 
         check_as_bytes(&value, &mut ());
 
         let value = Test::B {
             a: 42,
             b: true,
-            c: 'x',
+            c: 'x'.into(),
         };
 
         check_as_bytes(&value, &mut ());
