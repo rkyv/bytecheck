@@ -19,7 +19,6 @@ use syn::{
 
 #[derive(Default)]
 struct Repr {
-    pub rust: Option<Path>,
     pub transparent: Option<Path>,
     pub packed: Option<Path>,
     pub c: Option<Path>,
@@ -85,16 +84,34 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
                 } else if meta.path.is_ident("repr") {
                     for n in meta.nested.iter() {
                         if let NestedMeta::Meta(Meta::Path(path)) = n {
-                            if path.is_ident("rust") {
-                                result.repr.rust = Some(path.clone());
-                            } else if path.is_ident("transparent") {
+                            if path.is_ident("transparent") {
                                 result.repr.transparent = Some(path.clone());
                             } else if path.is_ident("packed") {
                                 result.repr.packed = Some(path.clone());
                             } else if path.is_ident("C") {
                                 result.repr.c = Some(path.clone());
+                            } else if path.is_ident("align") {
+                                // Ignore alignment modifiers
                             } else {
-                                result.repr.int = Some(path.clone());
+                                let is_int_repr = path.is_ident("i8")
+                                    || path.is_ident("i16")
+                                    || path.is_ident("i32")
+                                    || path.is_ident("i64")
+                                    || path.is_ident("i128")
+                                    || path.is_ident("u8")
+                                    || path.is_ident("u16")
+                                    || path.is_ident("u32")
+                                    || path.is_ident("u64")
+                                    || path.is_ident("u128");
+
+                                if is_int_repr {
+                                    result.repr.int = Some(path.clone());
+                                } else {
+                                    return Err(Error::new_spanned(
+                                        path,
+                                        "invalid repr, available reprs are transparent, C, i* and u*",
+                                    ));
+                                }
                             }
                         }
                     }
@@ -245,16 +262,10 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             }
         },
         Data::Enum(ref data) => {
-            if let Some(path) = attributes
-                .repr
-                .rust
-                .or(attributes.repr.transparent)
-                .or(attributes.repr.packed)
-                .or(attributes.repr.c)
-            {
+            if let Some(path) = attributes.repr.transparent.or(attributes.repr.packed) {
                 return Err(Error::new_spanned(
                     path,
-                    "archive self enums must be repr(C) or repr(Int)",
+                    "enums implementing CheckBytes cannot be repr(transparent) or repr(packed)",
                 ));
             }
 
