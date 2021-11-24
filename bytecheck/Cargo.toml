@@ -1,6 +1,6 @@
 [package]
 name = "bytecheck"
-version = "0.6.5"
+version = "0.6.6"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
 description = "Derive macro for bytecheck"
@@ -15,7 +15,7 @@ readme = "crates-io.md"
 
 [dependencies]
 bytecheck_derive = { version = "=0.6.5", path = "../bytecheck_derive", default-features = false }
-ptr_meta = "0.1"
+ptr_meta = { version = "0.1", default-features = false }
 simdutf8 = { version = "0.1", default-features = false, optional = true }
 
 # Support for various common crates. These are primarily to get users off the ground and build some
@@ -31,4 +31,4 @@ uuid = { version = "0.8", optional = true }
 default = ["std"]
 verbose = []
 simdutf8_std = ["simdutf8/std"]
-std = ["bytecheck_derive/std"]
+std = ["ptr_meta/std", "bytecheck_derive/std"]

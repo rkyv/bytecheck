@@ -116,8 +116,8 @@
 //! - [`uuid`](https://docs.rs/uuid)
 
 #![deny(
-    broken_intra_doc_links,
-    missing_crate_level_docs,
+    rustdoc::broken_intra_doc_links,
+    rustdoc::missing_crate_level_docs,
     missing_docs,
     rust_2018_compatibility,
     rust_2018_idioms,
