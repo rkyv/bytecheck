@@ -72,6 +72,42 @@ jobs:
           command: test
           args: --target ${{ matrix.target }} --verbose
 
+  test-native-macos:
+    name: Test (stable) - ${{ matrix.target }}
+    runs-on: macos-10.15
+    strategy:
+      matrix:
+        target:
+          - aarch64-apple-ios
+          - x86_64-apple-ios
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v2
+        name: Cache Cargo registry + index
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - run: echo "::add-matcher::.github/matchers/rust.json"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: -target ${{ matrix.target }} --verbose
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: test
+          args: -target ${{ matrix.target }} --verbose
+
   test-native:
     name: Test (stable) - ${{ matrix.display_name }}
     runs-on: ${{ matrix.os }}
