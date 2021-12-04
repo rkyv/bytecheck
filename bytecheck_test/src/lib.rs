@@ -438,6 +438,7 @@ mod tests {
     #[test]
     fn test_context() {
         use core::{convert::Infallible, fmt};
+        use bytecheck::ArrayCheckError;
 
         #[derive(Debug)]
         #[repr(transparent)]
@@ -464,8 +465,8 @@ mod tests {
         #[cfg(feature = "std")]
         impl std::error::Error for TestError {}
 
-        impl From<Infallible> for TestError {
-            fn from(_: Infallible) -> Self {
+        impl From<ArrayCheckError<Infallible>> for TestError {
+            fn from(_: ArrayCheckError<Infallible>) -> Self {
                 unsafe { core::hint::unreachable_unchecked() }
             }
         }
@@ -477,7 +478,8 @@ mod tests {
                 value: *const Test,
                 context: &mut TestContext,
             ) -> Result<&'a Self, Self::Error> {
-                let found = *i32::check_bytes(value.cast(), context)?;
+                let bytes = *<[u8; 4]>::check_bytes(value.cast(), context)?;
+                let found = i32::from_le_bytes(bytes);
                 let expected = context.0;
                 if expected == found {
                     Ok(&*value)
