@@ -25,7 +25,7 @@ simdutf8 = { version = "0.1", default-features = false, optional = true }
 # implementations should be moved into their respective crates over time. Before adding support for
 # another crate, please consider getting bytecheck support in the crate instead.
 
-uuid = { version = "0.8", optional = true }
+uuid = { version = "1.0", optional = true }
 
 [features]
 default = ["std"]
