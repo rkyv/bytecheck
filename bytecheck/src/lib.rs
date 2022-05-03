@@ -560,6 +560,65 @@ impl<C: ?Sized> CheckBytes<C> for str {
     }
 }
 
+/// An error resulting from an invalid `CStr`.
+#[cfg(feature = "std")]
+#[derive(Debug)]
+pub enum CStrCheckError {
+    /// The UTF-8 C string failed to validate
+    Utf8Error(Utf8Error),
+    /// The string did not end with a null terminator
+    MissingNullTerminator,
+}
+
+#[cfg(feature = "std")]
+impl From<Utf8Error> for CStrCheckError {
+    fn from(e: Utf8Error) -> Self {
+        Self::Utf8Error(e)
+    }
+}
+
+#[cfg(feature = "std")]
+impl fmt::Display for CStrCheckError {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CStrCheckError::Utf8Error(e) => write!(f, "utf8 error: {}", e),
+            CStrCheckError::MissingNullTerminator => write!(f, "missing null terminator"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CStrCheckError {
+    #[inline]
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            CStrCheckError::Utf8Error(e) => Some(e),
+            CStrCheckError::MissingNullTerminator => None,
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<C: ?Sized> CheckBytes<C> for ::std::ffi::CStr {
+    type Error = CStrCheckError;
+
+    #[inline]
+    unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+        let (data, len) = PtrExt::to_raw_parts(value);
+        if len == 0 {
+            Err(CStrCheckError::MissingNullTerminator)
+        } else {
+            from_utf8(slice::from_raw_parts(data.cast(), len - 1))?;
+            if *data.cast::<u8>().add(len - 1) != 0 {
+                Err(CStrCheckError::MissingNullTerminator)
+            } else {
+                Ok(&*value)
+            }
+        }
+    }
+}
+
 /// An error resulting from an invalid struct.
 #[derive(Debug)]
 pub struct StructCheckError {

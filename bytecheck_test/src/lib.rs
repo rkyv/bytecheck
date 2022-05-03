@@ -520,6 +520,34 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
+    fn test_c_str() {
+        use {
+            ::std::ffi::CStr,
+            ::bytecheck::CStrCheckError,
+        };
+
+        macro_rules! test_cases {
+            ($($bytes:expr, $pat:pat,)*) => {
+                $(
+                    let bytes = $bytes;
+                    let c_str = ::ptr_meta::from_raw_parts(bytes.as_ptr().cast(), bytes.len());
+                    assert!(matches!(<CStr as CheckBytes<()>>::check_bytes(c_str, &mut ()), $pat));
+                )*
+            }
+        }
+
+        unsafe {
+            test_cases! {
+                b"hello world\0", Ok(_),
+                b"hello world", Err(CStrCheckError::MissingNullTerminator),
+                b"", Err(CStrCheckError::MissingNullTerminator),
+                [0xc3, 0x28, 0x00], Err(CStrCheckError::Utf8Error(_)),
+            }
+        }
+    }
+
+    #[test]
     fn test_recursive() {
         struct MyBox<T: ?Sized> {
             inner: *const T,

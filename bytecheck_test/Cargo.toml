@@ -11,6 +11,7 @@ repository = "https://github.com/djkoloski/bytecheck"
 
 [dependencies]
 bytecheck = { version = "0.6", path = "../bytecheck", default-features = false }
+ptr_meta = "~0.1.4"
 
 [features]
 default = ["std"]
