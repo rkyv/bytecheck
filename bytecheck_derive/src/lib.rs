@@ -202,7 +202,10 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                         type Error = StructCheckError;
 
-                        unsafe fn check_bytes<'__bytecheck>(value: *const Self, context: &mut __C) -> Result<&'__bytecheck Self, Self::Error> {
+                        unsafe fn check_bytes<'__bytecheck>(
+                            value: *const Self,
+                            context: &mut __C,
+                        ) -> ::core::result::Result<&'__bytecheck Self, StructCheckError> {
                             let bytes = value.cast::<u8>();
                             #(#field_checks)*
                             Ok(&*value)
@@ -241,7 +244,10 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                         type Error = TupleStructCheckError;
 
-                        unsafe fn check_bytes<'__bytecheck>(value: *const Self, context: &mut __C) -> Result<&'__bytecheck Self, Self::Error> {
+                        unsafe fn check_bytes<'__bytecheck>(
+                            value: *const Self,
+                            context: &mut __C,
+                        ) -> ::core::result::Result<&'__bytecheck Self, TupleStructCheckError> {
                             let bytes = value.cast::<u8>();
                             #(#field_checks)*
                             Ok(&*value)
@@ -254,7 +260,10 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     impl #impl_generics CheckBytes<__C> for #name #ty_generics #impl_where_clause {
                         type Error = Infallible;
 
-                        unsafe fn check_bytes<'__bytecheck>(value: *const Self, context: &mut __C) -> Result<&'__bytecheck Self, Self::Error> {
+                        unsafe fn check_bytes<'__bytecheck>(
+                            value: *const Self,
+                            context: &mut __C,
+                        ) -> ::core::result::Result<&'__bytecheck Self, Infallible> {
                             Ok(&*value)
                         }
                     }
@@ -438,7 +447,10 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                     type Error = EnumCheckError<#repr>;
 
-                    unsafe fn check_bytes<'__bytecheck>(value: *const Self, context: &mut __C) -> Result<&'__bytecheck Self, Self::Error> {
+                    unsafe fn check_bytes<'__bytecheck>(
+                        value: *const Self,
+                        context: &mut __C,
+                    ) -> ::core::result::Result<&'__bytecheck Self, EnumCheckError<#repr>> {
                         let tag = *value.cast::<#repr>();
                         match tag {
                             #(#tag_variant_values => #check_arms)*
