@@ -437,8 +437,8 @@ mod tests {
 
     #[test]
     fn test_context() {
-        use core::{convert::Infallible, fmt};
         use bytecheck::ArrayCheckError;
+        use core::{convert::Infallible, fmt};
 
         #[derive(Debug)]
         #[repr(transparent)]
@@ -522,10 +522,7 @@ mod tests {
     #[test]
     #[cfg(feature = "std")]
     fn test_c_str() {
-        use {
-            ::std::ffi::CStr,
-            ::bytecheck::CStrCheckError,
-        };
+        use {::bytecheck::CStrCheckError, ::std::ffi::CStr};
 
         macro_rules! test_cases {
             ($($bytes:expr, $pat:pat,)*) => {
