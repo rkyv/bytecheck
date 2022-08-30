@@ -539,7 +539,7 @@ mod tests {
                 b"hello world\0", Ok(_),
                 b"hello world", Err(CStrCheckError::MissingNullTerminator),
                 b"", Err(CStrCheckError::MissingNullTerminator),
-                [0xc3, 0x28, 0x00], Err(CStrCheckError::Utf8Error(_)),
+                [0xc3u8, 0x28u8, 0x00u8], Err(CStrCheckError::Utf8Error(_)),
             }
         }
     }
