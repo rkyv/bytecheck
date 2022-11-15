@@ -153,6 +153,7 @@ use core::{
     convert::{Infallible, TryFrom},
     fmt,
     marker::{PhantomData, PhantomPinned},
+    mem::ManuallyDrop,
     num::{
         NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroU128, NonZeroU16,
         NonZeroU32, NonZeroU64, NonZeroU8,
@@ -279,6 +280,16 @@ impl<C: ?Sized> CheckBytes<C> for PhantomPinned {
 
     #[inline]
     unsafe fn check_bytes<'a>(value: *const Self, _: &mut C) -> Result<&'a Self, Self::Error> {
+        Ok(&*value)
+    }
+}
+
+impl<C: ?Sized, T: CheckBytes<C>> CheckBytes<C> for ManuallyDrop<T> {
+    type Error = T::Error;
+
+    #[inline]
+    unsafe fn check_bytes<'a>(value: *const Self, c: &mut C) -> Result<&'a Self, Self::Error> {
+        let _ = T::check_bytes(value as *const T, c)?;
         Ok(&*value)
     }
 }
