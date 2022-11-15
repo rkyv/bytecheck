@@ -284,7 +284,7 @@ impl<C: ?Sized> CheckBytes<C> for PhantomPinned {
     }
 }
 
-impl<C: ?Sized, T: CheckBytes<C>> CheckBytes<C> for ManuallyDrop<T> {
+impl<C: ?Sized, T: CheckBytes<C> + ?Sized> CheckBytes<C> for ManuallyDrop<T> {
     type Error = T::Error;
 
     #[inline]
