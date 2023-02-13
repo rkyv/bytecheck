@@ -183,12 +183,12 @@ impl<T: fmt::Debug + fmt::Display + 'static + Send + Sync> Error for T {}
 #[cfg(feature = "std")]
 pub trait Error: std::error::Error + 'static + Send + Sync {
     /// Gets this error as an `std::error::Error`.
-    fn as_error(&self) -> &(dyn std::error::Error + 'static);
+    fn as_error(&self) -> &(dyn std::error::Error + 'static + Send + Sync);
 }
 
 #[cfg(feature = "std")]
 impl<T: std::error::Error + 'static + Send + Sync> Error for T {
-    fn as_error(&self) -> &(dyn std::error::Error + 'static) {
+    fn as_error(&self) -> &(dyn std::error::Error + 'static + Send + Sync) {
         self
     }
 }
