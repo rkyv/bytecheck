@@ -187,7 +187,7 @@ pub trait Error: std::error::Error + 'static + Send + Sync {
 }
 
 #[cfg(feature = "std")]
-impl<T: std::error::Error + 'static> Error for T {
+impl<T: std::error::Error + 'static + Send + Sync> Error for T {
     fn as_error(&self) -> &(dyn std::error::Error + 'static) {
         self
     }
