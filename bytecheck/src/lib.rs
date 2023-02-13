@@ -172,10 +172,10 @@ pub use bytecheck_derive::CheckBytes;
 ///
 /// With the `std` feature, this also supports `std::error::Error`.
 #[cfg(not(feature = "std"))]
-pub trait Error: fmt::Debug + fmt::Display + 'static {}
+pub trait Error: fmt::Debug + fmt::Display + 'static + Send + Sync {}
 
 #[cfg(not(feature = "std"))]
-impl<T: fmt::Debug + fmt::Display + 'static> Error for T {}
+impl<T: fmt::Debug + fmt::Display + 'static + Send + Sync> Error for T {}
 
 /// An error that can be debugged and displayed.
 ///
