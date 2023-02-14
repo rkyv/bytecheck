@@ -4,3 +4,11 @@ members = [
     "bytecheck_derive",
     "bytecheck_test",
 ]
+
+[workspace.package]
+version = "0.7.0"
+authors = ["David Koloski <djkoloski@gmail.com>"]
+edition = "2021"
+license = "MIT"
+documentation = "https://docs.rs/bytecheck"
+repository = "https://github.com/djkoloski/bytecheck"
