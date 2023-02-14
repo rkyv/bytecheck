@@ -20,7 +20,7 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
-    - name: Run clippy, deny warnings
-      run: cargo clippy --all-targets --all-features -- -D warnings
     - name: Run rustfmt
       run: cargo fmt --all -- --check
+    - name: Run clippy, deny warnings
+      run: cargo clippy --version && cargo clippy --all-targets --all-features -- -D warnings
