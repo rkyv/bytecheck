@@ -343,7 +343,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
             let variant_structs = data.variants.iter().map(|v| {
                 let variant = &v.ident;
-                let variant_name = Ident::new(&format!("Variant{}", variant.to_string()), v.span());
+                let variant_name = Ident::new(&format!("Variant{variant}"), v.span());
                 match v.fields {
                     Fields::Named(ref fields) => {
                         let fields = fields.named.iter().map(|f| {
@@ -380,7 +380,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
             let check_arms = data.variants.iter().map(|v| {
                 let variant = &v.ident;
-                let variant_name = Ident::new(&format!("Variant{}", variant.to_string()), v.span());
+                let variant_name = Ident::new(&format!("Variant{variant}"), v.span());
                 match v.fields {
                     Fields::Named(ref fields) => {
                         let checks = fields.named.iter().map(|f| {
