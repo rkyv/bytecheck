@@ -1,12 +1,12 @@
 [package]
 name = "bytecheck_derive"
-version = "0.7.0"
-authors = ["David Koloski <djkoloski@gmail.com>"]
-edition = "2018"
 description = "Derive macro for bytecheck"
-license = "MIT"
 documentation = "https://docs.rs/bytecheck_derive"
-repository = "https://github.com/djkoloski/bytecheck"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
