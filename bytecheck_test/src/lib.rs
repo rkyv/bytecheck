@@ -578,4 +578,24 @@ mod tests {
             Node::check_bytes(&cons, &mut ()).unwrap();
         }
     }
+
+    #[test]
+    fn test_explicit_crate_root() {
+        mod bytecheck {}
+        mod m {
+            pub use ::bytecheck as bc;
+        }
+
+        #[derive(CheckBytes)]
+        #[check_bytes(crate = "m::bc")]
+        struct Test;
+
+        check_as_bytes(&Test, &mut ());
+
+        #[derive(CheckBytes)]
+        #[check_bytes(crate = "::bytecheck")]
+        struct Test2;
+
+        check_as_bytes(&Test2, &mut ());
+    }
 }
