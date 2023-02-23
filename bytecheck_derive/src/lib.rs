@@ -219,6 +219,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 });
 
                 quote! {
+                    #[automatically_derived]
                     impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                         type Error = StructCheckError;
 
@@ -261,6 +262,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 });
 
                 quote! {
+                    #[automatically_derived]
                     impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                         type Error = TupleStructCheckError;
 
@@ -277,6 +279,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             }
             Fields::Unit => {
                 quote! {
+                    #[automatically_derived]
                     impl #impl_generics CheckBytes<__C> for #name #ty_generics #impl_where_clause {
                         type Error = Infallible;
 
@@ -458,12 +461,14 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
                 struct Discriminant;
 
+                #[automatically_derived]
                 impl Discriminant {
                     #(#discriminant_const_defs)*
                 }
 
                 #(#variant_structs)*
 
+                #[automatically_derived]
                 impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
                     type Error = EnumCheckError<#repr>;
 
@@ -496,6 +501,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
         .unwrap_or(parse_quote!(bytecheck));
 
     Ok(quote! {
+        #[allow(unused_results)]
         const _: () = {
             use ::core::{convert::Infallible, marker::PhantomData};
             use #bytecheck_crate::{
