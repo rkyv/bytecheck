@@ -9,7 +9,7 @@
     clippy::all
 )]
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Group, Span, TokenStream, TokenTree};
 use quote::{quote, quote_spanned};
 use syn::{
     parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned, AttrStyle, Data,
@@ -29,6 +29,7 @@ struct Repr {
 struct Attributes {
     pub repr: Repr,
     pub bound: Option<LitStr>,
+    pub bytecheck_crate: Option<Path>,
 }
 
 fn parse_check_bytes_attributes(attributes: &mut Attributes, meta: &Meta) -> Result<(), Error> {
@@ -49,6 +50,25 @@ fn parse_check_bytes_attributes(attributes: &mut Attributes, meta: &Meta) -> Res
                     Err(Error::new_spanned(
                         &meta.lit,
                         "bound arguments must be a string",
+                    ))
+                }
+            } else if meta.path.is_ident("crate") {
+                if let Lit::Str(ref lit_str) = meta.lit {
+                    if attributes.bytecheck_crate.is_none() {
+                        let tokens = respan(syn::parse_str(&lit_str.value())?, lit_str.span());
+                        let parsed: Path = syn::parse2(tokens)?;
+                        attributes.bytecheck_crate = Some(parsed);
+                        Ok(())
+                    } else {
+                        Err(Error::new_spanned(
+                            meta,
+                            "check_bytes crate already specified",
+                        ))
+                    }
+                } else {
+                    Err(Error::new_spanned(
+                        &meta.lit,
+                        "crate argument must be a string",
                     ))
                 }
             } else {
@@ -469,10 +489,16 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
         }
     };
 
+    // Default to `bytecheck`, rather than `::bytecheck`,
+    // to allow providing it from a reexport, e.g. `use rkyv::bytecheck;`.
+    let bytecheck_crate = attributes
+        .bytecheck_crate
+        .unwrap_or(parse_quote!(bytecheck));
+
     Ok(quote! {
         const _: () = {
             use ::core::{convert::Infallible, marker::PhantomData};
-            use bytecheck::{
+            use #bytecheck_crate::{
                 CheckBytes,
                 EnumCheckError,
                 ErrorBox,
@@ -483,4 +509,19 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             #check_bytes_impl
         };
     })
+}
+
+fn respan(stream: TokenStream, span: Span) -> TokenStream {
+    stream
+        .into_iter()
+        .map(|token| respan_token(token, span))
+        .collect()
+}
+
+fn respan_token(mut token: TokenTree, span: Span) -> TokenTree {
+    if let TokenTree::Group(g) = &mut token {
+        *g = Group::new(g.delimiter(), respan(g.stream(), span));
+    }
+    token.set_span(span);
+    token
 }
