@@ -11,7 +11,7 @@ repository.workspace = true
 
 [dependencies]
 bytecheck = { path = "../bytecheck", default-features = false }
-ptr_meta = "~0.1.4"
+ptr_meta = "0.2"
 
 [features]
 default = ["std"]
