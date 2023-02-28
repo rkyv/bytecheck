@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.6.10"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -14,4 +14,4 @@ documentation = "https://docs.rs/bytecheck"
 repository = "https://github.com/djkoloski/bytecheck"
 
 [workspace.dependencies]
-bytecheck_derive = "0.7.0"
+bytecheck_derive = "0.6.10"

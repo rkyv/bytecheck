@@ -172,23 +172,23 @@ pub use bytecheck_derive::CheckBytes;
 ///
 /// With the `std` feature, this also supports `std::error::Error`.
 #[cfg(not(feature = "std"))]
-pub trait Error: fmt::Debug + fmt::Display + 'static + Send + Sync {}
+pub trait Error: fmt::Debug + fmt::Display + 'static {}
 
 #[cfg(not(feature = "std"))]
-impl<T: fmt::Debug + fmt::Display + 'static + Send + Sync> Error for T {}
+impl<T: fmt::Debug + fmt::Display + 'static> Error for T {}
 
 /// An error that can be debugged and displayed.
 ///
 /// With the `std` feature, this also supports `std::error::Error`.
 #[cfg(feature = "std")]
-pub trait Error: std::error::Error + 'static + Send + Sync {
+pub trait Error: std::error::Error + 'static {
     /// Gets this error as an `std::error::Error`.
-    fn as_error(&self) -> &(dyn std::error::Error + 'static + Send + Sync);
+    fn as_error(&self) -> &(dyn std::error::Error + 'static);
 }
 
 #[cfg(feature = "std")]
-impl<T: std::error::Error + 'static + Send + Sync> Error for T {
-    fn as_error(&self) -> &(dyn std::error::Error + 'static + Send + Sync) {
+impl<T: std::error::Error + 'static> Error for T {
+    fn as_error(&self) -> &(dyn std::error::Error + 'static) {
         self
     }
 }
