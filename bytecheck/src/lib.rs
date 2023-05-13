@@ -428,7 +428,7 @@ macro_rules! impl_tuple {
             #[allow(clippy::unneeded_wildcard_pattern)]
             unsafe fn check_bytes<'a>(value: *const Self, context: &mut C) -> Result<&'a Self, Self::Error> {
                 let field_bytes = ($(ptr::addr_of!((*value).$index),)+);
-                $($type::check_bytes(field_bytes.$index.cast::<$type>(), context).map_err($error::$type)?;)+
+                impl_tuple!(@check_fields field_bytes, $error, context, $($type $index,)*);
                 Ok(&*value)
             }
         }
@@ -437,7 +437,12 @@ macro_rules! impl_tuple {
             [$($error_rest,)*],
             [$($type $index,)+]
         }
-    }
+    };
+    (@check_fields $field_bytes:ident, $error:ident, $context:ident,) => {};
+    (@check_fields $field_bytes:ident, $error:ident, $context:ident, $type:ident $index:tt, $($type_rest:ident $index_rest:tt,)*) => {
+        impl_tuple!(@check_fields $field_bytes, $error, $context, $($type_rest $index_rest,)*);
+        $type::check_bytes($field_bytes.$index, $context).map_err($error::$type)?;
+    };
 }
 
 impl_tuple! {
