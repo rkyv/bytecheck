@@ -12,9 +12,9 @@
 use proc_macro2::{Group, Span, TokenStream, TokenTree};
 use quote::{quote, quote_spanned};
 use syn::{
-    parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned, AttrStyle, Data,
-    DeriveInput, Error, Fields, Ident, Index, Lit, LitStr, Meta, NestedMeta, Path, Token,
-    WherePredicate,
+    parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned,
+    AttrStyle, Data, DeriveInput, Error, Fields, Ident, Index, Lit, LitStr,
+    Meta, NestedMeta, Path, Token, WherePredicate,
 };
 
 #[derive(Default)]
@@ -29,10 +29,13 @@ struct Repr {
 struct Attributes {
     pub repr: Repr,
     pub bound: Option<LitStr>,
-    pub bytecheck_crate: Option<Path>,
+    pub crate_path: Option<Path>,
 }
 
-fn parse_check_bytes_attributes(attributes: &mut Attributes, meta: &Meta) -> Result<(), Error> {
+fn parse_check_bytes_attributes(
+    attributes: &mut Attributes,
+    meta: &Meta,
+) -> Result<(), Error> {
     match meta {
         Meta::NameValue(meta) => {
             if meta.path.is_ident("bound") {
@@ -54,10 +57,13 @@ fn parse_check_bytes_attributes(attributes: &mut Attributes, meta: &Meta) -> Res
                 }
             } else if meta.path.is_ident("crate") {
                 if let Lit::Str(ref lit_str) = meta.lit {
-                    if attributes.bytecheck_crate.is_none() {
-                        let tokens = respan(syn::parse_str(&lit_str.value())?, lit_str.span());
+                    if attributes.crate_path.is_none() {
+                        let tokens = respan(
+                            syn::parse_str(&lit_str.value())?,
+                            lit_str.span(),
+                        );
                         let parsed: Path = syn::parse2(tokens)?;
-                        attributes.bytecheck_crate = Some(parsed);
+                        attributes.crate_path = Some(parsed);
                         Ok(())
                     } else {
                         Err(Error::new_spanned(
@@ -157,7 +163,9 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
 /// trait bound and allow recursive structures. This may be too coarse for some types, in which case
 /// additional type bounds may be required with `bound = "..."`.
 #[proc_macro_derive(CheckBytes, attributes(check_bytes, omit_bounds))]
-pub fn check_bytes_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn check_bytes_derive(
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
     match derive_check_bytes(parse_macro_input!(input as DeriveInput)) {
         Ok(result) => result.into(),
         Err(e) => e.to_compile_error().into(),
@@ -167,112 +175,111 @@ pub fn check_bytes_derive(input: proc_macro::TokenStream) -> proc_macro::TokenSt
 fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
     let attributes = parse_attributes(&input)?;
 
+    // Default to `bytecheck`, rather than `::bytecheck`,
+    // to allow providing it from a reexport, e.g. `use rkyv::bytecheck;`.
+    let crate_path = attributes.crate_path.unwrap_or(parse_quote!(bytecheck));
+
     let mut impl_input_generics = input.generics.clone();
     let impl_where_clause = impl_input_generics.make_where_clause();
     if let Some(ref bounds) = attributes.bound {
-        let clauses =
-            bounds.parse_with(Punctuated::<WherePredicate, Token![,]>::parse_terminated)?;
+        let clauses = bounds.parse_with(
+            Punctuated::<WherePredicate, Token![,]>::parse_terminated,
+        )?;
         for clause in clauses {
             impl_where_clause.predicates.push(clause);
         }
     }
     impl_input_generics
         .params
-        .insert(0, parse_quote! { __C: ?Sized });
+        .insert(0, parse_quote! { __C: #crate_path::Context + ?Sized });
 
     let name = &input.ident;
 
-    let (impl_generics, _, impl_where_clause) = impl_input_generics.split_for_impl();
+    let (impl_generics, _, impl_where_clause) =
+        impl_input_generics.split_for_impl();
     let impl_where_clause = impl_where_clause.unwrap();
 
     input.generics.make_where_clause();
-    let (struct_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let (struct_generics, ty_generics, where_clause) =
+        input.generics.split_for_impl();
     let where_clause = where_clause.unwrap();
 
     let check_bytes_impl = match input.data {
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => {
                 let mut check_where = impl_where_clause.clone();
-                for field in fields
-                    .named
-                    .iter()
-                    .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
-                {
+                for field in fields.named.iter().filter(|f| {
+                    !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds"))
+                }) {
                     let ty = &field.ty;
-                    check_where
-                        .predicates
-                        .push(parse_quote! { #ty: CheckBytes<__C> });
+                    check_where.predicates.push(
+                        parse_quote! { #ty: #crate_path::CheckBytes<__C> },
+                    );
                 }
 
                 let field_checks = fields.named.iter().map(|f| {
                     let field = &f.ident;
                     let ty = &f.ty;
                     quote_spanned! { ty.span() =>
-                        <#ty as CheckBytes<__C>>::check_bytes(
+                        <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
                             ::core::ptr::addr_of!((*value).#field),
                             context
-                        ).map_err(|e| StructCheckError {
-                            field_name: stringify!(#field),
-                            inner: ErrorBox::new(e),
-                        })?;
+                        ).map_err(|e| <__C::Error as #crate_path::Contextual>::context(e, #crate_path::StructCheckContext {
+                            struct_name: ::core::stringify!(#name),
+                            field_name: ::core::stringify!(#field),
+                        }))?;
                     }
                 });
 
                 quote! {
                     #[automatically_derived]
-                    impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
-                        type Error = StructCheckError;
-
-                        unsafe fn check_bytes<'__bytecheck>(
+                    unsafe impl #impl_generics #crate_path::CheckBytes<__C> for #name #ty_generics #check_where {
+                        unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
-                        ) -> ::core::result::Result<&'__bytecheck Self, StructCheckError> {
+                        ) -> ::core::result::Result<(), __C::Error> {
                             let bytes = value.cast::<u8>();
                             #(#field_checks)*
-                            Ok(&*value)
+                            Ok(())
                         }
                     }
                 }
             }
             Fields::Unnamed(ref fields) => {
                 let mut check_where = impl_where_clause.clone();
-                for field in fields
-                    .unnamed
-                    .iter()
-                    .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
-                {
+                for field in fields.unnamed.iter().filter(|f| {
+                    !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds"))
+                }) {
                     let ty = &field.ty;
-                    check_where
-                        .predicates
-                        .push(parse_quote! { #ty: CheckBytes<__C> });
+                    check_where.predicates.push(
+                        parse_quote! { #ty: #crate_path::CheckBytes<__C> },
+                    );
                 }
 
                 let field_checks = fields.unnamed.iter().enumerate().map(|(i, f)| {
                     let ty = &f.ty;
                     let index = Index::from(i);
                     quote_spanned! { ty.span() =>
-                        <#ty as CheckBytes<__C>>::check_bytes(
+                        <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
                             ::core::ptr::addr_of!((*value).#index),
                             context
-                        ).map_err(|e| TupleStructCheckError {
+                        ).map_err(|e| <__C::Error as #crate_path::Contextual>::context(e, #crate_path::TupleStructCheckContext {
+                            tuple_struct_name: ::core::stringify!(#name),
                             field_index: #i,
-                            inner: ErrorBox::new(e),
-                        })?;
+                        }))?;
                     }
                 });
 
                 quote! {
                     #[automatically_derived]
-                    impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
-                        type Error = TupleStructCheckError;
-
-                        unsafe fn check_bytes<'__bytecheck>(
+                    unsafe impl #impl_generics #crate_path::CheckBytes<__C> for #name #ty_generics #check_where {
+                        unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
-                        ) -> ::core::result::Result<&'__bytecheck Self, TupleStructCheckError> {
+                        ) -> ::core::result::Result<(), __C::Error> {
                             let bytes = value.cast::<u8>();
                             #(#field_checks)*
-                            Ok(&*value)
+                            Ok(())
                         }
                     }
                 }
@@ -280,21 +287,21 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             Fields::Unit => {
                 quote! {
                     #[automatically_derived]
-                    impl #impl_generics CheckBytes<__C> for #name #ty_generics #impl_where_clause {
-                        type Error = Infallible;
-
-                        unsafe fn check_bytes<'__bytecheck>(
+                    unsafe impl #impl_generics #crate_path::CheckBytes<__C> for #name #ty_generics #impl_where_clause {
+                        unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
-                        ) -> ::core::result::Result<&'__bytecheck Self, Infallible> {
-                            Ok(&*value)
+                        ) -> ::core::result::Result<(), __C::Error> {
+                            Ok(())
                         }
                     }
                 }
             }
         },
         Data::Enum(ref data) => {
-            if let Some(path) = attributes.repr.transparent.or(attributes.repr.packed) {
+            if let Some(path) =
+                attributes.repr.transparent.or(attributes.repr.packed)
+            {
                 return Err(Error::new_spanned(
                     path,
                     "enums implementing CheckBytes cannot be repr(transparent) or repr(packed)",
@@ -315,27 +322,27 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             for v in data.variants.iter() {
                 match v.fields {
                     Fields::Named(ref fields) => {
-                        for field in fields
-                            .named
-                            .iter()
-                            .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
-                        {
+                        for field in fields.named.iter().filter(|f| {
+                            !f.attrs
+                                .iter()
+                                .any(|a| a.path.is_ident("omit_bounds"))
+                        }) {
                             let ty = &field.ty;
                             check_where
                                 .predicates
-                                .push(parse_quote! { #ty: CheckBytes<__C> });
+                                .push(parse_quote! { #ty: #crate_path::CheckBytes<__C> });
                         }
                     }
                     Fields::Unnamed(ref fields) => {
-                        for field in fields
-                            .unnamed
-                            .iter()
-                            .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
-                        {
+                        for field in fields.unnamed.iter().filter(|f| {
+                            !f.attrs
+                                .iter()
+                                .any(|a| a.path.is_ident("omit_bounds"))
+                        }) {
                             let ty = &field.ty;
                             check_where
                                 .predicates
-                                .push(parse_quote! { #ty: CheckBytes<__C> });
+                                .push(parse_quote! { #ty: #crate_path::CheckBytes<__C> });
                         }
                     }
                     Fields::Unit => (),
@@ -379,7 +386,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             struct #variant_name #struct_generics #where_clause {
                                 __tag: Tag,
                                 #(#fields,)*
-                                __phantom: PhantomData<#name #ty_generics>,
+                                __phantom: ::core::marker::PhantomData<#name #ty_generics>,
                             }
                         }
                     }
@@ -393,7 +400,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             struct #variant_name #struct_generics (
                                 Tag,
                                 #(#fields,)*
-                                PhantomData<#name #ty_generics>
+                                ::core::marker::PhantomData<#name #ty_generics>
                             ) #where_clause;
                         }
                     }
@@ -407,19 +414,17 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 match v.fields {
                     Fields::Named(ref fields) => {
                         let checks = fields.named.iter().map(|f| {
-                            let name = &f.ident;
+                            let field_name = &f.ident;
                             let ty = &f.ty;
                             quote! {
-                                <#ty as CheckBytes<__C>>::check_bytes(
-                                    ::core::ptr::addr_of!((*value).#name),
+                                <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
+                                    ::core::ptr::addr_of!((*value).#field_name),
                                     context
-                                ).map_err(|e| EnumCheckError::InvalidStruct {
-                                    variant_name: stringify!(#variant),
-                                    inner: StructCheckError {
-                                        field_name: stringify!(#name),
-                                        inner: ErrorBox::new(e),
-                                    },
-                                })?;
+                                ).map_err(|e| <__C::Error as #crate_path::Contextual>::context(e, #crate_path::NamedEnumVariantCheckContext {
+                                    enum_name: ::core::stringify!(#name),
+                                    variant_name: ::core::stringify!(#variant),
+                                    field_name: ::core::stringify!(#field_name),
+                                }))?;
                             }
                         });
                         quote_spanned! { variant.span() => {
@@ -432,16 +437,14 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             let ty = &f.ty;
                             let index = Index::from(i + 1);
                             quote! {
-                                <#ty as CheckBytes<__C>>::check_bytes(
+                                <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
                                     ::core::ptr::addr_of!((*value).#index),
                                     context
-                                ).map_err(|e| EnumCheckError::InvalidTuple {
-                                    variant_name: stringify!(#variant),
-                                    inner: TupleStructCheckError {
-                                        field_index: #i,
-                                        inner: ErrorBox::new(e),
-                                    },
-                                })?;
+                                ).map_err(|e| <__C::Error as #crate_path::Contextual>::context(e, #crate_path::UnnamedEnumVariantCheckContext {
+                                    enum_name: ::core::stringify!(#name),
+                                    variant_name: ::core::stringify!(#variant),
+                                    field_index: #index,
+                                }))?;
                             }
                         });
                         quote_spanned! { variant.span() => {
@@ -469,19 +472,22 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 #(#variant_structs)*
 
                 #[automatically_derived]
-                impl #impl_generics CheckBytes<__C> for #name #ty_generics #check_where {
-                    type Error = EnumCheckError<#repr>;
-
-                    unsafe fn check_bytes<'__bytecheck>(
+                unsafe impl #impl_generics #crate_path::CheckBytes<__C> for #name #ty_generics #check_where {
+                    unsafe fn check_bytes(
                         value: *const Self,
                         context: &mut __C,
-                    ) -> ::core::result::Result<&'__bytecheck Self, EnumCheckError<#repr>> {
+                    ) -> ::core::result::Result<(), __C::Error> {
                         let tag = *value.cast::<#repr>();
                         match tag {
                             #(#tag_variant_values => #check_arms)*
-                            _ => return Err(EnumCheckError::InvalidTag(tag)),
+                            _ => return Err(<__C::Error as #crate_path::Contextual>::new_with(|| {
+                                #crate_path::InvalidEnumDiscriminantError {
+                                    enum_name: ::core::stringify!(#name),
+                                    invalid_discriminant: tag,
+                                }
+                            })),
                         }
-                        Ok(&*value)
+                        Ok(())
                     }
                 }
             }
@@ -494,26 +500,8 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
         }
     };
 
-    // Default to `bytecheck`, rather than `::bytecheck`,
-    // to allow providing it from a reexport, e.g. `use rkyv::bytecheck;`.
-    let bytecheck_crate = attributes
-        .bytecheck_crate
-        .unwrap_or(parse_quote!(bytecheck));
-
     Ok(quote! {
-        #[allow(unused_results)]
-        const _: () = {
-            use ::core::{convert::Infallible, marker::PhantomData};
-            use #bytecheck_crate::{
-                CheckBytes,
-                EnumCheckError,
-                ErrorBox,
-                StructCheckError,
-                TupleStructCheckError,
-            };
-
-            #check_bytes_impl
-        };
+        #check_bytes_impl
     })
 }
 

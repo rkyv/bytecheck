@@ -15,8 +15,8 @@ repository.workspace = true
 
 [dependencies]
 bytecheck_derive = { workspace = true, path = "../bytecheck_derive", default-features = false }
-ptr_meta = { version = "0.1", default-features = false }
-simdutf8 = { version = "0.1", default-features = false, optional = true }
+ptr_meta.workspace = true
+simdutf8 = { workspace = true, optional = true }
 
 # Support for various common crates. These are primarily to get users off the ground and build some
 # momentum.
@@ -25,9 +25,9 @@ simdutf8 = { version = "0.1", default-features = false, optional = true }
 # implementations should be moved into their respective crates over time. Before adding support for
 # another crate, please consider getting bytecheck support in the crate instead.
 
-uuid = { version = "1.3", optional = true }
+uuid = { workspace = true, optional = true }
 
 [features]
 default = ["simdutf8", "std"]
-verbose = []
-std = ["ptr_meta/std", "bytecheck_derive/std", "simdutf8/std"]
+alloc = []
+std = ["alloc", "ptr_meta/std", "bytecheck_derive/std", "simdutf8/std"]

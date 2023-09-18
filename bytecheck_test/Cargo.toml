@@ -10,10 +10,9 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytecheck = { path = "../bytecheck", default-features = false }
-ptr_meta = "0.2"
+bytecheck.workspace = true
+ptr_meta.workspace = true
 
 [features]
 default = ["std"]
-verbose = ["bytecheck/verbose"]
 std = ["bytecheck/std"]

@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -14,4 +14,11 @@ documentation = "https://docs.rs/bytecheck"
 repository = "https://github.com/djkoloski/bytecheck"
 
 [workspace.dependencies]
-bytecheck_derive = "0.7.0"
+bytecheck = { version = "0.8.0", path = "bytecheck", default-feature = false }
+bytecheck_derive = { version = "0.8.0", path = "bytecheck_derive", default-features = false }
+proc-macro2 = { version = "1.0", default-features = false }
+ptr_meta = { version = "0.2", default-features = false }
+simdutf8 = { version = "0.1", default-features = false }
+syn = { version = "1.0", default-features = false }
+uuid = { version = "1.4", default-features = false }
+quote = { version = "1.0", default-features = false }
