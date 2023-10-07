@@ -24,12 +24,13 @@
 //! use bytecheck::{CheckBytes, FailureContext};
 //!
 //! #[derive(CheckBytes, Debug)]
+//! #[repr(C)]
 //! struct Test {
 //!     a: u32,
-//!     b: bool,
-//!     c: char,
+//!     b: char,
+//!     c: bool,
 //! }
-//! #[repr(C, align(16))]
+//! #[repr(C, align(4))]
 //! struct Aligned<const N: usize>([u8; N]);
 //!
 //! macro_rules! bytes {
@@ -41,15 +42,15 @@
 //!     };
 //! }
 //!
-//! // This type is laid out as (u32, char, bool)
 //! // In this example, the architecture is assumed to be little-endian
 //! # #[cfg(target_endian = "little")]
 //! unsafe {
-//!     // These are valid bytes for (0, 'x', true)
+//!     // These are valid bytes for a `Test`
 //!     Test::check_bytes(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
-//!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
+//!             0u8, 0u8, 0u8, 0u8,
+//!             0x78u8, 0u8, 0u8, 0u8,
+//!             1u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
 //!         &mut FailureContext,
 //!     ).unwrap();
@@ -57,8 +58,9 @@
 //!     // Changing the bytes for the u32 is OK, any bytes are a valid u32
 //!     Test::check_bytes(
 //!         bytes![
-//!             42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8,
-//!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
+//!             42u8, 16u8, 20u8, 3u8,
+//!             0x78u8, 0u8, 0u8, 0u8,
+//!             1u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
 //!         &mut FailureContext,
 //!     ).unwrap();
@@ -66,15 +68,17 @@
 //!     // Characters outside the valid ranges are invalid
 //!     Test::check_bytes(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8,
-//!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
+//!             0u8, 0u8, 0u8, 0u8,
+//!             0x00u8, 0xd8u8, 0u8, 0u8,
+//!             1u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
 //!         &mut FailureContext,
 //!     ).unwrap_err();
 //!     Test::check_bytes(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8,
-//!             1u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
+//!             0u8, 0u8, 0u8, 0u8,
+//!             0x00u8, 0x00u8, 0x11u8, 0u8,
+//!             1u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
 //!         &mut FailureContext,
 //!     ).unwrap_err();
@@ -82,15 +86,17 @@
 //!     // 0 is a valid boolean value (false) but 2 is not
 //!     Test::check_bytes(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
-//!             0u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
+//!             0u8, 0u8, 0u8, 0u8,
+//!             0x78u8, 0u8, 0u8, 0u8,
+//!             0u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
 //!         &mut FailureContext,
 //!     ).unwrap();
 //!     Test::check_bytes(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8,
-//!             2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8
+//!             0u8, 0u8, 0u8, 0u8,
+//!             0x78u8, 0u8, 0u8, 0u8,
+//!             2u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
 //!         &mut FailureContext,
 //!     ).unwrap_err();
@@ -164,7 +170,6 @@ use core::{
     },
     ops, ptr,
 };
-use ptr_meta::PtrExt;
 #[cfg(all(feature = "simdutf8"))]
 use simdutf8::basic::from_utf8;
 
@@ -594,7 +599,7 @@ unsafe impl<T: CheckBytes<C>, C: Context + ?Sized> CheckBytes<C> for [T] {
         value: *const Self,
         context: &mut C,
     ) -> Result<(), C::Error> {
-        let (data_address, len) = PtrExt::to_raw_parts(value);
+        let (data_address, len) = ptr_meta::PtrExt::to_raw_parts(value);
         let base = data_address.cast::<T>();
         for index in 0..len {
             // SAFETY: The caller has guaranteed that `value` points to enough

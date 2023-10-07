@@ -9,142 +9,78 @@
     clippy::all
 )]
 
-use proc_macro2::{Group, Span, TokenStream, TokenTree};
-use quote::{quote, quote_spanned};
+mod repr;
+
+use proc_macro2::TokenStream;
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{
-    parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned,
-    AttrStyle, Data, DeriveInput, Error, Fields, Ident, Index, Lit, LitStr,
-    Meta, NestedMeta, Path, Token, WherePredicate,
+    meta::ParseNestedMeta, parse_macro_input, parse_quote,
+    punctuated::Punctuated, spanned::Spanned, AttrStyle, Data, DeriveInput,
+    Error, Fields, Ident, Index, LitStr, Path, Token, WherePredicate,
 };
 
-#[derive(Default)]
-struct Repr {
-    pub transparent: Option<Path>,
-    pub packed: Option<Path>,
-    pub c: Option<Path>,
-    pub int: Option<Path>,
-}
+use repr::Repr;
+
+use crate::repr::BaseRepr;
 
 #[derive(Default)]
 struct Attributes {
     pub repr: Repr,
-    pub bound: Option<LitStr>,
+    pub bound: Option<Punctuated<WherePredicate, Token![,]>>,
     pub crate_path: Option<Path>,
+}
+
+fn try_set_attribute<T: ToTokens>(
+    attribute: &mut Option<T>,
+    value: T,
+    name: &'static str,
+) -> Result<(), Error> {
+    if attribute.is_none() {
+        *attribute = Some(value);
+        Ok(())
+    } else {
+        Err(Error::new_spanned(
+            value,
+            format!("{name} already specified"),
+        ))
+    }
 }
 
 fn parse_check_bytes_attributes(
     attributes: &mut Attributes,
-    meta: &Meta,
+    meta: ParseNestedMeta<'_>,
 ) -> Result<(), Error> {
-    match meta {
-        Meta::NameValue(meta) => {
-            if meta.path.is_ident("bound") {
-                if let Lit::Str(ref lit_str) = meta.lit {
-                    if attributes.bound.is_none() {
-                        attributes.bound = Some(lit_str.clone());
-                        Ok(())
-                    } else {
-                        Err(Error::new_spanned(
-                            meta,
-                            "check_bytes bound already specified",
-                        ))
-                    }
-                } else {
-                    Err(Error::new_spanned(
-                        &meta.lit,
-                        "bound arguments must be a string",
-                    ))
-                }
-            } else if meta.path.is_ident("crate") {
-                if let Lit::Str(ref lit_str) = meta.lit {
-                    if attributes.crate_path.is_none() {
-                        let tokens = respan(
-                            syn::parse_str(&lit_str.value())?,
-                            lit_str.span(),
-                        );
-                        let parsed: Path = syn::parse2(tokens)?;
-                        attributes.crate_path = Some(parsed);
-                        Ok(())
-                    } else {
-                        Err(Error::new_spanned(
-                            meta,
-                            "check_bytes crate already specified",
-                        ))
-                    }
-                } else {
-                    Err(Error::new_spanned(
-                        &meta.lit,
-                        "crate argument must be a string",
-                    ))
-                }
-            } else {
-                Err(Error::new_spanned(
-                    &meta.path,
-                    "unrecognized check_bytes argument",
-                ))
-            }
-        }
-        _ => Err(Error::new_spanned(
-            meta,
-            "unrecognized check_bytes argument",
-        )),
+    if meta.path.is_ident("bound") {
+        let lit_str = meta.value()?.parse::<LitStr>()?;
+        let bound = lit_str.parse_with(Punctuated::parse_terminated)?;
+        try_set_attribute(&mut attributes.bound, bound, "bound")
+    } else if meta.path.is_ident("crate") {
+        let crate_path = meta.value()?.parse::<LitStr>()?.parse()?;
+        try_set_attribute(&mut attributes.crate_path, crate_path, "crate")
+    } else {
+        Err(meta.error("unrecognized check_bytes argument"))
     }
 }
 
 fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
     let mut result = Attributes::default();
-    for a in input.attrs.iter() {
-        if let AttrStyle::Outer = a.style {
-            if let Ok(Meta::List(meta)) = a.parse_meta() {
-                if meta.path.is_ident("check_bytes") {
-                    for nested in meta.nested.iter() {
-                        if let NestedMeta::Meta(meta) = nested {
-                            parse_check_bytes_attributes(&mut result, meta)?;
-                        } else {
-                            return Err(Error::new_spanned(
-                                nested,
-                                "check_bytes parameters must be metas",
-                            ));
-                        }
-                    }
-                } else if meta.path.is_ident("repr") {
-                    for n in meta.nested.iter() {
-                        if let NestedMeta::Meta(Meta::Path(path)) = n {
-                            if path.is_ident("transparent") {
-                                result.repr.transparent = Some(path.clone());
-                            } else if path.is_ident("packed") {
-                                result.repr.packed = Some(path.clone());
-                            } else if path.is_ident("C") {
-                                result.repr.c = Some(path.clone());
-                            } else if path.is_ident("align") {
-                                // Ignore alignment modifiers
-                            } else {
-                                let is_int_repr = path.is_ident("i8")
-                                    || path.is_ident("i16")
-                                    || path.is_ident("i32")
-                                    || path.is_ident("i64")
-                                    || path.is_ident("i128")
-                                    || path.is_ident("u8")
-                                    || path.is_ident("u16")
-                                    || path.is_ident("u32")
-                                    || path.is_ident("u64")
-                                    || path.is_ident("u128");
 
-                                if is_int_repr {
-                                    result.repr.int = Some(path.clone());
-                                } else {
-                                    return Err(Error::new_spanned(
-                                        path,
-                                        "invalid repr, available reprs are transparent, C, i* and u*",
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+    for attr in input.attrs.iter() {
+        if !matches!(attr.style, AttrStyle::Outer) {
+            continue;
+        }
+
+        if attr.path().is_ident("check_bytes") {
+            attr.parse_nested_meta(|nested| {
+                parse_check_bytes_attributes(&mut result, nested)
+            })?;
+        } else if attr.path().is_ident("repr") {
+            attr.parse_nested_meta(|nested| {
+                result.repr.parse_list_meta(nested)
+            })?;
         }
     }
+
     Ok(result)
 }
 
@@ -182,11 +118,8 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
     let mut impl_input_generics = input.generics.clone();
     let impl_where_clause = impl_input_generics.make_where_clause();
     if let Some(ref bounds) = attributes.bound {
-        let clauses = bounds.parse_with(
-            Punctuated::<WherePredicate, Token![,]>::parse_terminated,
-        )?;
-        for clause in clauses {
-            impl_where_clause.predicates.push(clause);
+        for clause in bounds {
+            impl_where_clause.predicates.push(clause.clone());
         }
     }
     impl_input_generics
@@ -209,7 +142,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             Fields::Named(ref fields) => {
                 let mut check_where = impl_where_clause.clone();
                 for field in fields.named.iter().filter(|f| {
-                    !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds"))
+                    !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds"))
                 }) {
                     let ty = &field.ty;
                     check_where.predicates.push(
@@ -248,7 +181,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             Fields::Unnamed(ref fields) => {
                 let mut check_where = impl_where_clause.clone();
                 for field in fields.unnamed.iter().filter(|f| {
-                    !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds"))
+                    !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds"))
                 }) {
                     let ty = &field.ty;
                     check_where.predicates.push(
@@ -272,7 +205,9 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
                 quote! {
                     #[automatically_derived]
-                    unsafe impl #impl_generics #crate_path::CheckBytes<__C> for #name #ty_generics #check_where {
+                    unsafe impl #impl_generics #crate_path::CheckBytes<__C> for
+                        #name #ty_generics #check_where
+                    {
                         unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
@@ -287,7 +222,9 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             Fields::Unit => {
                 quote! {
                     #[automatically_derived]
-                    unsafe impl #impl_generics #crate_path::CheckBytes<__C> for #name #ty_generics #impl_where_clause {
+                    unsafe impl #impl_generics #crate_path::CheckBytes<__C> for
+                        #name #ty_generics #impl_where_clause
+                    {
                         unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
@@ -299,23 +236,24 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             }
         },
         Data::Enum(ref data) => {
-            if let Some(path) =
-                attributes.repr.transparent.or(attributes.repr.packed)
-            {
-                return Err(Error::new_spanned(
-                    path,
-                    "enums implementing CheckBytes cannot be repr(transparent) or repr(packed)",
-                ));
-            }
-
-            let repr = match attributes.repr.int {
-                None => {
-                    return Err(Error::new(
-                        input.span(),
-                        "enums implementing CheckBytes must be repr(Int)",
-                    ));
+            let repr = match attributes.repr.base_repr {
+                None => return Err(Error::new_spanned(
+                    name,
+                    "enums implementing CheckBytes must have an explicit repr",
+                )),
+                Some((BaseRepr::Transparent, _)) => {
+                    return Err(Error::new_spanned(
+                        name,
+                        "enums cannot be repr(transparent)",
+                    ))
                 }
-                Some(ref repr) => repr,
+                Some((BaseRepr::C, _)) => {
+                    return Err(Error::new_spanned(
+                        name,
+                        "repr(C) enums are not currently supported",
+                    ))
+                }
+                Some((BaseRepr::Int(i), _)) => i,
             };
 
             let mut check_where = impl_where_clause.clone();
@@ -325,7 +263,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         for field in fields.named.iter().filter(|f| {
                             !f.attrs
                                 .iter()
-                                .any(|a| a.path.is_ident("omit_bounds"))
+                                .any(|a| a.path().is_ident("omit_bounds"))
                         }) {
                             let ty = &field.ty;
                             check_where
@@ -337,7 +275,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         for field in fields.unnamed.iter().filter(|f| {
                             !f.attrs
                                 .iter()
-                                .any(|a| a.path.is_ident("omit_bounds"))
+                                .any(|a| a.path().is_ident("omit_bounds"))
                         }) {
                             let ty = &field.ty;
                             check_where
@@ -503,19 +441,4 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
     Ok(quote! {
         #check_bytes_impl
     })
-}
-
-fn respan(stream: TokenStream, span: Span) -> TokenStream {
-    stream
-        .into_iter()
-        .map(|token| respan_token(token, span))
-        .collect()
-}
-
-fn respan_token(mut token: TokenTree, span: Span) -> TokenTree {
-    if let TokenTree::Group(g) = &mut token {
-        *g = Group::new(g.delimiter(), respan(g.stream(), span));
-    }
-    token.set_span(span);
-    token
 }

@@ -152,3 +152,74 @@ impl<T: Pointee + ?Sized> DerefMut for ThinBox<T> {
         unsafe { &mut *self.as_ptr() }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ThinBox;
+
+    use ptr_meta::pointee;
+
+    #[pointee]
+    trait DynTrait {
+        fn int(&self) -> i32;
+    }
+
+    impl DynTrait for () {
+        fn int(&self) -> i32 {
+            10
+        }
+    }
+
+    impl DynTrait for i32 {
+        fn int(&self) -> i32 {
+            *self
+        }
+    }
+
+    impl DynTrait for String {
+        fn int(&self) -> i32 {
+            self.parse().unwrap()
+        }
+    }
+
+    #[test]
+    fn sized_types() {
+        let box_unit = unsafe { ThinBox::new_unchecked((), |x| x) };
+        assert_eq!(*box_unit, ());
+
+        let box_int = unsafe { ThinBox::new_unchecked(10, |x| x) };
+        assert_eq!(*box_int, 10);
+
+        let box_string =
+            unsafe { ThinBox::new_unchecked("hello world".to_string(), |x| x) };
+        assert_eq!(*box_string, "hello world");
+    }
+
+    #[test]
+    fn unsized_types() {
+        let box_dyn_int =
+            unsafe { ThinBox::new_unchecked(10, |x| x as *mut dyn DynTrait) };
+        assert_eq!(box_dyn_int.int(), 10);
+
+        let box_dyn_string = unsafe {
+            ThinBox::new_unchecked("10".to_string(), |x| x as *mut dyn DynTrait)
+        };
+        assert_eq!(box_dyn_string.int(), 10);
+
+        let box_slice = unsafe {
+            ThinBox::new_unchecked([1, 2, 3, 4], |x| x as *mut [i32])
+        };
+        assert_eq!(*box_slice, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn zst_dst() {
+        let box_unit_debug =
+            unsafe { ThinBox::new_unchecked((), |x| x as *mut dyn DynTrait) };
+        assert_eq!(box_unit_debug.int(), 10);
+
+        let box_empty_slice =
+            unsafe { ThinBox::new_unchecked([], |x| x as *mut [i32]) };
+        assert_eq!(*box_empty_slice, []);
+    }
+}
