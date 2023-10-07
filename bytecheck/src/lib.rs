@@ -188,10 +188,12 @@ macro_rules! define_error_trait {
         #[cfg_attr(feature = "alloc", ptr_meta::pointee)]
         pub trait Error: $($supertraits)* {
             /// Returns this error as its supertraits.
+            #[cfg(feature = "std")]
             fn downcast(&self) -> &(dyn $($supertraits)*);
         }
 
         impl<T: $($supertraits)*> Error for T {
+            #[cfg(feature = "std")]
             fn downcast(&self) -> &(dyn $($supertraits)*) {
                 self
             }
