@@ -173,6 +173,9 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
                 quote! {
                     #[automatically_derived]
+                    // SAFETY: `check_bytes` only returns `Ok` if all of the
+                    // fields of the struct are valid. If all of the fields are
+                    // valid, then the overall struct is also valid.
                     unsafe impl #impl_generics #crate_path::CheckBytes<__C> for
                         #name #ty_generics
                     #check_where
@@ -225,6 +228,9 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
                 quote! {
                     #[automatically_derived]
+                    // SAFETY: `check_bytes` only returns `Ok` if all of the
+                    // fields of the struct are valid. If all of the fields are
+                    // valid, then the overall struct is also valid.
                     unsafe impl #impl_generics #crate_path::CheckBytes<__C> for
                         #name #ty_generics
                     #check_where
@@ -243,6 +249,8 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             Fields::Unit => {
                 quote! {
                     #[automatically_derived]
+                    // SAFETY: Unit structs are always valid since they have a
+                    // size of 0 and no invalid bit patterns.
                     unsafe impl #impl_generics #crate_path::CheckBytes<__C> for
                         #name #ty_generics #impl_where_clause
                     {
@@ -435,6 +443,11 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 #(#variant_structs)*
 
                 #[automatically_derived]
+                // SAFETY: `check_bytes` only returns `Ok` if:
+                // - The discriminant is valid for some variant of the enum, and
+                // - Each field of the variant struct is valid.
+                // If the discriminant is valid and the fields of the indicated
+                // variant struct are valid, then the overall enum is valid.
                 unsafe impl #impl_generics #crate_path::CheckBytes<__C> for
                     #name #ty_generics
                 #check_where
