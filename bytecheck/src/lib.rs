@@ -21,7 +21,8 @@
 //! ## Examples
 //!
 //! ```
-//! use bytecheck::{CheckBytes, FailureContext};
+//! use bytecheck::CheckBytes;
+//! use rancor::Failure;
 //!
 //! #[derive(CheckBytes, Debug)]
 //! #[repr(C)]
@@ -52,7 +53,7 @@
 //!             0x78u8, 0u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
-//!         &mut FailureContext,
+//!         &mut Failure,
 //!     ).unwrap();
 //!
 //!     // Changing the bytes for the u32 is OK, any bytes are a valid u32
@@ -62,7 +63,7 @@
 //!             0x78u8, 0u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
-//!         &mut FailureContext,
+//!         &mut Failure,
 //!     ).unwrap();
 //!
 //!     // Characters outside the valid ranges are invalid
@@ -72,7 +73,7 @@
 //!             0x00u8, 0xd8u8, 0u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
-//!         &mut FailureContext,
+//!         &mut Failure,
 //!     ).unwrap_err();
 //!     Test::check_bytes(
 //!         bytes![
@@ -80,7 +81,7 @@
 //!             0x00u8, 0x00u8, 0x11u8, 0u8,
 //!             1u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
-//!         &mut FailureContext,
+//!         &mut Failure,
 //!     ).unwrap_err();
 //!
 //!     // 0 is a valid boolean value (false) but 2 is not
@@ -90,7 +91,7 @@
 //!             0x78u8, 0u8, 0u8, 0u8,
 //!             0u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
-//!         &mut FailureContext,
+//!         &mut Failure,
 //!     ).unwrap();
 //!     Test::check_bytes(
 //!         bytes![
@@ -98,7 +99,7 @@
 //!             0x78u8, 0u8, 0u8, 0u8,
 //!             2u8, 255u8, 255u8, 255u8,
 //!         ].cast(),
-//!         &mut FailureContext,
+//!         &mut Failure,
 //!     ).unwrap_err();
 //! }
 //! ```
@@ -134,11 +135,6 @@
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "alloc")]
-mod boxed_error;
-#[cfg(feature = "alloc")]
-mod thin_box;
-
 // Support for various common crates. These are primarily to get users off the
 // ground and build some momentum.
 
@@ -170,124 +166,11 @@ use core::{
     },
     ops, ptr,
 };
+pub use rancor::{Error, Fallible};
 #[cfg(all(feature = "simdutf8"))]
 use simdutf8::basic::from_utf8;
 
 pub use bytecheck_derive::CheckBytes;
-
-macro_rules! define_error_trait {
-    ($($supertraits:tt)*) => {
-        /// An error that can be debugged and displayed.
-        ///
-        /// Without the `std` feature enabled, this has supertraits of
-        /// [`core::fmt::Debug`] and [`core::fmt::Display`]. With the `std`
-        /// feature enabled, this also has a supertrait of [`std::error::Error`]
-        /// instead.
-        ///
-        /// This trait is always `Send + Sync + 'static`.
-        #[cfg_attr(feature = "alloc", ptr_meta::pointee)]
-        pub trait Error: $($supertraits)* {
-            /// Returns this error as its supertraits.
-            #[cfg(feature = "std")]
-            fn downcast(&self) -> &(dyn $($supertraits)*);
-        }
-
-        impl<T: $($supertraits)*> Error for T {
-            #[cfg(feature = "std")]
-            fn downcast(&self) -> &(dyn $($supertraits)*) {
-                self
-            }
-        }
-    };
-}
-
-#[cfg(feature = "std")]
-define_error_trait!(std::error::Error + Send + Sync + 'static);
-
-#[cfg(not(feature = "std"))]
-define_error_trait!(
-    core::fmt::Debug + core::fmt::Display + Send + Sync + 'static
-);
-
-/// An error type which can be uniformly constructed from a bytecheck [`Error`].
-///
-/// All types which can fail to check require a context with a `Contextual`
-/// error type.
-pub trait Contextual: Sized + Error {
-    /// Returns a new `Self` using the given [`Error`].
-    ///
-    /// Depending on the specific implementation, this may box the error or
-    /// discard it and only remember that some error occurred.
-    fn new<T: Error>(source: T) -> Self;
-
-    /// Returns a new `Self` using the [`Error`] returned by calling
-    /// `make_source`.
-    ///
-    /// Depending on the specific implementation, this may box the error or
-    /// discard it and only remember that some error occurred.
-    fn new_with<T: Error, F: FnOnce() -> T>(make_source: F) -> Self {
-        Self::new(make_source())
-    }
-
-    /// Adds additional context to this error, returning a new error.
-    fn context<T: fmt::Debug + Display + Send + Sync + 'static>(
-        self,
-        context: T,
-    ) -> Self;
-}
-
-/// A validation context.
-pub trait Context {
-    /// The error type that can be produced when validating with this context.
-    type Error: Contextual;
-}
-
-/// A validation context that simply records success or failure, throwing away
-/// any detailed error messages.
-#[derive(Debug)]
-pub struct Failure;
-
-impl Display for Failure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "failed to check bytes")
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for Failure {}
-
-impl Contextual for Failure {
-    fn new<T: Display>(_: T) -> Self {
-        Self
-    }
-
-    fn new_with<T: Display, F: FnOnce() -> T>(_: F) -> Self {
-        Self
-    }
-
-    fn context<T: Display>(self, _: T) -> Self {
-        self
-    }
-}
-
-/// A basic validation context with an error type of [`Failure`].
-pub struct FailureContext;
-
-impl Context for FailureContext {
-    type Error = Failure;
-}
-
-#[cfg(feature = "alloc")]
-pub use boxed_error::BoxedError;
-
-#[cfg(feature = "alloc")]
-/// A basic validation context with an error type of [`BoxedError`].
-pub struct ErrorContext;
-
-#[cfg(feature = "alloc")]
-impl Context for ErrorContext {
-    type Error = BoxedError;
-}
 
 /// A type that can check whether a pointer points to a valid value.
 ///
@@ -300,7 +183,7 @@ impl Context for ErrorContext {
 /// `Self`. Because `value` must always be properly aligned for `Self` and point
 /// to enough bytes to represent the type, this implies that `value` may be
 /// dereferenced safely.
-pub unsafe trait CheckBytes<C: Context + ?Sized> {
+pub unsafe trait CheckBytes<C: Fallible + ?Sized> {
     /// Checks whether the given pointer points to a valid value within the
     /// given context.
     ///
@@ -317,7 +200,7 @@ pub unsafe trait CheckBytes<C: Context + ?Sized> {
 macro_rules! impl_primitive {
     ($type:ty) => {
         // SAFETY: All bit patterns are valid for these primitive types.
-        unsafe impl<C: Context + ?Sized> CheckBytes<C> for $type {
+        unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for $type {
             #[inline]
             unsafe fn check_bytes(
                 _: *const Self,
@@ -353,7 +236,7 @@ impl_primitives!(AtomicI32, AtomicU32);
 impl_primitives!(AtomicI64, AtomicU64);
 
 // SAFETY: `PhantomData` is a zero-sized type and so all bit patterns are valid.
-unsafe impl<T: ?Sized, C: Context + ?Sized> CheckBytes<C> for PhantomData<T> {
+unsafe impl<T: ?Sized, C: Fallible + ?Sized> CheckBytes<C> for PhantomData<T> {
     #[inline]
     unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), C::Error> {
         Ok(())
@@ -362,7 +245,7 @@ unsafe impl<T: ?Sized, C: Context + ?Sized> CheckBytes<C> for PhantomData<T> {
 
 // SAFETY: `PhantomPinned` is a zero-sized type and so all bit patterns are
 // valid.
-unsafe impl<C: Context + ?Sized> CheckBytes<C> for PhantomPinned {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for PhantomPinned {
     #[inline]
     unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), C::Error> {
         Ok(())
@@ -383,7 +266,7 @@ impl Display for ManuallyDropContext {
 // valid `T`.
 unsafe impl<C, T> CheckBytes<C> for ManuallyDrop<T>
 where
-    C: Context + ?Sized,
+    C: Fallible + ?Sized,
     T: CheckBytes<C> + ?Sized,
 {
     #[inline]
@@ -429,7 +312,7 @@ impl std::error::Error for BoolCheckError {}
 
 // SAFETY: A bool is a one byte value that must either be 0 or 1. `check_bytes`
 // only returns `Ok` if `value` is 0 or 1.
-unsafe impl<C: Context + ?Sized> CheckBytes<C> for bool {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for bool {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
@@ -450,7 +333,7 @@ unsafe impl<C: Context + ?Sized> CheckBytes<C> for bool {
 #[cfg(target_has_atomic = "8")]
 // SAFETY: `AtomicBool` has the same ABI as `bool`, so if `value` points to a
 // valid `bool` then it also points to a valid `AtomicBool`.
-unsafe impl<C: Context + ?Sized> CheckBytes<C> for AtomicBool {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for AtomicBool {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
@@ -465,7 +348,7 @@ unsafe impl<C: Context + ?Sized> CheckBytes<C> for AtomicBool {
 
 // SAFETY: If `char::try_from` succeeds with the pointed-to-value, then it must
 // be a valid value for `char`.
-unsafe impl<C: Context + ?Sized> CheckBytes<C> for char {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for char {
     #[inline]
     unsafe fn check_bytes(ptr: *const Self, _: &mut C) -> Result<(), C::Error> {
         // SAFETY: `char` and `u32` are both four bytes, but we're not
@@ -497,7 +380,7 @@ macro_rules! impl_tuple {
         unsafe impl<$($type,)* C> CheckBytes<C> for ($($type,)*)
         where
             $($type: CheckBytes<C>,)*
-            C: Context + ?Sized,
+            C: Fallible + ?Sized,
         {
             #[inline]
             #[allow(clippy::unneeded_wildcard_pattern)]
@@ -560,7 +443,7 @@ impl Display for ArrayCheckContext {
 unsafe impl<T, C, const N: usize> CheckBytes<C> for [T; N]
 where
     T: CheckBytes<C>,
-    C: Context + ?Sized,
+    C: Fallible + ?Sized,
 {
     #[inline]
     unsafe fn check_bytes(
@@ -595,7 +478,7 @@ impl Display for SliceCheckContext {
 // SAFETY: `check_bytes` only returns `Ok` if each element of the slice is
 // valid. If each element of the slice is valid then the whole slice is also
 // valid.
-unsafe impl<T: CheckBytes<C>, C: Context + ?Sized> CheckBytes<C> for [T] {
+unsafe impl<T: CheckBytes<C>, C: Fallible + ?Sized> CheckBytes<C> for [T] {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
@@ -618,7 +501,7 @@ unsafe impl<T: CheckBytes<C>, C: Context + ?Sized> CheckBytes<C> for [T] {
 
 // SAFETY: `check_bytes` only returns `Ok` if the bytes pointed to by `str` are
 // valid UTF-8. If they are valid UTF-8 then the overall `str` is also valid.
-unsafe impl<C: Context + ?Sized> CheckBytes<C> for str {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for str {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
@@ -637,7 +520,7 @@ unsafe impl<C: Context + ?Sized> CheckBytes<C> for str {
 #[cfg(feature = "std")]
 // SAFETY: `check_bytes` only returns `Ok` when the bytes constitute a valid
 // `CStr` per `CStr::from_bytes_with_nul`.
-unsafe impl<C: Context + ?Sized> CheckBytes<C> for std::ffi::CStr {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for std::ffi::CStr {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
@@ -655,7 +538,7 @@ unsafe impl<C: Context + ?Sized> CheckBytes<C> for std::ffi::CStr {
 
 // Generic contexts used by the derive.
 
-/// Context for errors resulting from invalid structs.
+/// Fallible for errors resulting from invalid structs.
 #[derive(Debug)]
 pub struct StructCheckContext {
     /// The name of the struct with an invalid field.
@@ -674,7 +557,7 @@ impl Display for StructCheckContext {
     }
 }
 
-/// Context for errors resulting from invalid tuple structs.
+/// Fallible for errors resulting from invalid tuple structs.
 #[derive(Debug)]
 pub struct TupleStructCheckContext {
     /// The name of the tuple struct with an invalid field.
@@ -718,7 +601,7 @@ impl<T> std::error::Error for InvalidEnumDiscriminantError<T> where
 {
 }
 
-/// Context for errors resulting from checking enum variants with named fields.
+/// Fallible for errors resulting from checking enum variants with named fields.
 #[derive(Debug)]
 pub struct NamedEnumVariantCheckContext {
     /// The name of the enum with an invalid variant.
@@ -739,7 +622,7 @@ impl Display for NamedEnumVariantCheckContext {
     }
 }
 
-/// Context for errors resulting from checking enum variants with unnamed
+/// Fallible for errors resulting from checking enum variants with unnamed
 /// fields.
 #[derive(Debug)]
 pub struct UnnamedEnumVariantCheckContext {
@@ -769,7 +652,7 @@ impl Display for UnnamedEnumVariantCheckContext {
 unsafe impl<T, C> CheckBytes<C> for ops::Range<T>
 where
     T: CheckBytes<C>,
-    C: Context + ?Sized,
+    C: Fallible + ?Sized,
 {
     #[inline]
     unsafe fn check_bytes(
@@ -807,7 +690,7 @@ where
 
 // SAFETY: A `RangeFrom<T>` is valid if its `start` is valid, and `check_bytes`
 // only returns `Ok` when its `start` is valid.
-unsafe impl<T: CheckBytes<C>, C: Context + ?Sized> CheckBytes<C>
+unsafe impl<T: CheckBytes<C>, C: Fallible + ?Sized> CheckBytes<C>
     for ops::RangeFrom<T>
 {
     #[inline]
@@ -834,7 +717,7 @@ unsafe impl<T: CheckBytes<C>, C: Context + ?Sized> CheckBytes<C>
 }
 
 // SAFETY: `RangeFull` is a ZST and so every pointer to one is valid.
-unsafe impl<C: Context + ?Sized> CheckBytes<C> for ops::RangeFull {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for ops::RangeFull {
     #[inline]
     unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), C::Error> {
         Ok(())
@@ -846,7 +729,7 @@ unsafe impl<C: Context + ?Sized> CheckBytes<C> for ops::RangeFull {
 unsafe impl<T, C> CheckBytes<C> for ops::RangeTo<T>
 where
     T: CheckBytes<C>,
-    C: Context + ?Sized,
+    C: Fallible + ?Sized,
 {
     #[inline]
     unsafe fn check_bytes(
@@ -876,7 +759,7 @@ where
 unsafe impl<T, C> CheckBytes<C> for ops::RangeToInclusive<T>
 where
     T: CheckBytes<C>,
-    C: Context + ?Sized,
+    C: Fallible + ?Sized,
 {
     #[inline]
     unsafe fn check_bytes(
@@ -918,7 +801,7 @@ macro_rules! impl_nonzero {
     ($nonzero:ident, $underlying:ident) => {
         // SAFETY: `check_bytes` only returns `Ok` when `value` is not zero, the
         // only validity condition for non-zero integer types.
-        unsafe impl<C: Context + ?Sized> CheckBytes<C> for $nonzero {
+        unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for $nonzero {
             #[inline]
             unsafe fn check_bytes(
                 value: *const Self,

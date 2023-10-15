@@ -126,7 +126,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
     }
     impl_input_generics
         .params
-        .insert(0, parse_quote! { __C: #crate_path::Context + ?Sized });
+        .insert(0, parse_quote! { __C: #crate_path::Fallible + ?Sized });
 
     let name = &input.ident;
 
@@ -160,7 +160,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             ::core::ptr::addr_of!((*value).#field),
                             context
                         ).map_err(|e| {
-                            <__C::Error as #crate_path::Contextual>::context(
+                            <__C::Error as #crate_path::Error>::context(
                                 e,
                                 #crate_path::StructCheckContext {
                                     struct_name: ::core::stringify!(#name),
@@ -211,9 +211,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                 ::core::ptr::addr_of!((*value).#index),
                                 context
                             ).map_err(|e| {
-                                <
-                                    __C::Error as #crate_path::Contextual
-                                >::context(
+                                <__C::Error as #crate_path::Error>::context(
                                     e,
                                     #crate_path::TupleStructCheckContext {
                                         tuple_struct_name: ::core::stringify!(
@@ -418,7 +416,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
             let no_matching_tag_arm = quote! {
                 return Err(
-                    <__C::Error as #crate_path::Contextual>::new_with(|| {
+                    <__C::Error as #crate_path::Error>::new_with(|| {
                         #crate_path::InvalidEnumDiscriminantError {
                             enum_name: ::core::stringify!(#name),
                             invalid_discriminant: tag,
@@ -491,7 +489,7 @@ fn check_arm_named_field(
         <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
             ::core::ptr::addr_of!((*value).#field_name),
             context
-        ).map_err(|e| <__C::Error as #crate_path::Contextual>::context(
+        ).map_err(|e| <__C::Error as #crate_path::Error>::context(
             e,
             #crate_path::NamedEnumVariantCheckContext {
                 enum_name: ::core::stringify!(#name),
@@ -515,7 +513,7 @@ fn check_arm_unnamed_field(
         <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
             ::core::ptr::addr_of!((*value).#index),
             context
-        ).map_err(|e| <__C::Error as #crate_path::Contextual>::context(
+        ).map_err(|e| <__C::Error as #crate_path::Error>::context(
             e,
             #crate_path::UnnamedEnumVariantCheckContext {
                 enum_name: ::core::stringify!(#name),

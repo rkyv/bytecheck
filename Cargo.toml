@@ -18,6 +18,7 @@ bytecheck = { version = "0.8.0", path = "bytecheck", default-feature = false }
 bytecheck_derive = { version = "0.8.0", path = "bytecheck_derive", default-features = false }
 proc-macro2 = { version = "1.0", default-features = false }
 ptr_meta = { version = "0.3", default-features = false, git = "https://github.com/rkyv/ptr_meta" }
+rancor = { version = "0.1", default-features = false, git = "https://github.com/rkyv/rancor" }
 simdutf8 = { version = "0.1", default-features = false }
 syn = { version = "2.0", default-features = false, features = ["full"] }
 uuid = { version = "1.4", default-features = false }

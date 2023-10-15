@@ -12,6 +12,7 @@ repository.workspace = true
 [dependencies]
 bytecheck.workspace = true
 ptr_meta.workspace = true
+rancor.workspace = true
 
 [features]
 default = ["std"]
