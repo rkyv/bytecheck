@@ -457,43 +457,47 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             let verify_check = verify_check(&check_where);
 
             quote! {
-                #[repr(#repr)]
-                enum Tag {
-                    #(#tag_variant_defs,)*
-                }
-
-                struct Discriminant;
-
-                #[automatically_derived]
-                impl Discriminant {
-                    #(#discriminant_const_defs)*
-                }
-
-                #(#variant_structs)*
-
-                #[automatically_derived]
-                // SAFETY: `check_bytes` only returns `Ok` if:
-                // - The discriminant is valid for some variant of the enum, and
-                // - Each field of the variant struct is valid.
-                // If the discriminant is valid and the fields of the indicated
-                // variant struct are valid, then the overall enum is valid.
-                unsafe impl #impl_generics #crate_path::CheckBytes<__C> for
-                    #name #ty_generics
-                #check_where
-                {
-                    unsafe fn check_bytes(
-                        value: *const Self,
-                        context: &mut __C,
-                    ) -> ::core::result::Result<(), __C::Error> {
-                        let tag = *value.cast::<#repr>();
-                        match tag {
-                            #(#tag_variant_values => #check_arms)*
-                            _ => #no_matching_tag_arm,
-                        }
-                        #verify_check
-                        Ok(())
+                const _: () = {
+                    #[repr(#repr)]
+                    enum Tag {
+                        #(#tag_variant_defs,)*
                     }
-                }
+
+                    struct Discriminant;
+
+                    #[automatically_derived]
+                    impl Discriminant {
+                        #(#discriminant_const_defs)*
+                    }
+
+                    #(#variant_structs)*
+
+                    #[automatically_derived]
+                    // SAFETY: `check_bytes` only returns `Ok` if:
+                    // - The discriminant is valid for some variant of the enum,
+                    //   and
+                    // - Each field of the variant struct is valid.
+                    // If the discriminant is valid and the fields of the
+                    // indicated variant struct are valid, then the overall enum
+                    // is valid.
+                    unsafe impl #impl_generics #crate_path::CheckBytes<__C> for
+                        #name #ty_generics
+                    #check_where
+                    {
+                        unsafe fn check_bytes(
+                            value: *const Self,
+                            context: &mut __C,
+                        ) -> ::core::result::Result<(), __C::Error> {
+                            let tag = *value.cast::<#repr>();
+                            match tag {
+                                #(#tag_variant_values => #check_arms)*
+                                _ => #no_matching_tag_arm,
+                            }
+                            #verify_check
+                            Ok(())
+                        }
+                    }
+                };
             }
         }
         Data::Union(_) => {
@@ -504,9 +508,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
         }
     };
 
-    Ok(quote! {
-        #check_bytes_impl
-    })
+    Ok(check_bytes_impl)
 }
 
 fn check_arm_named_field(
