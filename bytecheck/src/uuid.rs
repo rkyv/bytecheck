@@ -1,11 +1,12 @@
 //! [`CheckBytes`](crate::CheckBytes) implementations for uuid.
 
-use crate::{CheckBytes, Context};
+use crate::{CheckBytes, Fallible};
 use uuid::Uuid;
 
 // SAFETY: `Uuid` is `#[repr(transparent)]` around an inner `Bytes`, which is a
 // simple byte array. Byte arrays are always valid.
-unsafe impl<C: Context + ?Sized> CheckBytes<C> for Uuid {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for Uuid {
+    #[inline]
     unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), C::Error> {
         Ok(())
     }
@@ -13,7 +14,8 @@ unsafe impl<C: Context + ?Sized> CheckBytes<C> for Uuid {
 
 #[cfg(test)]
 mod bytecheck_tests {
-    use crate::{CheckBytes, FailureContext};
+    use crate::CheckBytes;
+    use rancor::Failure;
     use uuid::Uuid;
 
     #[test]
@@ -24,7 +26,7 @@ mod bytecheck_tests {
         // SAFETY: `&u` is aligned and points to enough bytes to represent a
         // `Uuid`.
         unsafe {
-            Uuid::check_bytes(&u as *const Uuid, &mut FailureContext)
+            Uuid::check_bytes(&u as *const Uuid, &mut Failure)
                 .expect("failed to check uuid");
         }
     }

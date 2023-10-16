@@ -546,4 +546,167 @@ mod tests {
 
         check_as_bytes(&Test2, &mut Failure);
     }
+
+    trait MyContext {
+        fn set_value(&mut self, value: i32);
+    }
+
+    struct FooContext {
+        value: i32,
+    }
+
+    impl Fallible for FooContext {
+        type Error = Failure;
+    }
+
+    impl MyContext for FooContext {
+        fn set_value(&mut self, value: i32) {
+            self.value = value;
+        }
+    }
+
+    #[test]
+    fn test_derive_verify_unit_struct() {
+        fn verify<C: MyContext + Fallible + ?Sized>(
+            _: &UnitStruct,
+            context: &mut C,
+        ) -> Result<(), C::Error> {
+            context.set_value(1);
+            Ok(())
+        }
+
+        #[derive(CheckBytes)]
+        #[check_bytes(
+            bounds(__C: MyContext),
+            verify = verify,
+        )]
+        struct UnitStruct;
+
+        let mut context = FooContext { value: 0 };
+        unsafe {
+            UnitStruct::check_bytes(&UnitStruct, &mut context).unwrap();
+        }
+
+        assert_eq!(context.value, 1);
+    }
+
+    #[test]
+    fn test_derive_verify_struct() {
+        fn verify<C: MyContext + Fallible + ?Sized>(
+            value: &Struct,
+            context: &mut C,
+        ) -> Result<(), C::Error> {
+            context.set_value(value.value);
+            Ok(())
+        }
+
+        #[derive(CheckBytes)]
+        #[check_bytes(
+            bounds(__C: MyContext),
+            verify = verify,
+        )]
+        struct Struct {
+            value: i32,
+        }
+
+        let mut context = FooContext { value: 0 };
+        unsafe {
+            Struct::check_bytes(&Struct { value: 4 }, &mut context).unwrap();
+        }
+
+        assert_eq!(context.value, 4);
+    }
+
+    #[test]
+    fn test_derive_verify_tuple_struct() {
+        fn verify<C: MyContext + Fallible + ?Sized>(
+            value: &TupleStruct,
+            context: &mut C,
+        ) -> Result<(), C::Error> {
+            context.set_value(value.0);
+            Ok(())
+        }
+
+        #[derive(CheckBytes)]
+        #[check_bytes(
+            bounds(__C: MyContext),
+            verify = verify,
+        )]
+        struct TupleStruct(i32);
+
+        let mut context = FooContext { value: 0 };
+        unsafe {
+            TupleStruct::check_bytes(&TupleStruct(10), &mut context).unwrap();
+        }
+
+        assert_eq!(context.value, 10);
+    }
+
+    #[test]
+    fn test_derive_verify_enum() {
+        fn verify<C: MyContext + Fallible + ?Sized>(
+            value: &Enum,
+            context: &mut C,
+        ) -> Result<(), C::Error> {
+            match value {
+                Enum::A => context.set_value(2),
+                Enum::B(value) => context.set_value(*value),
+                Enum::C { value } => context.set_value(*value),
+            }
+            Ok(())
+        }
+
+        #[derive(CheckBytes)]
+        #[check_bytes(
+            bounds(__C: MyContext),
+            verify = verify,
+        )]
+        #[repr(u8)]
+        enum Enum {
+            A,
+            B(i32),
+            C { value: i32 },
+        }
+
+        // Unit variant
+        let mut context = FooContext { value: 0 };
+        unsafe {
+            Enum::check_bytes(&Enum::A, &mut context).unwrap();
+        }
+
+        assert_eq!(context.value, 2);
+
+        // Tuple variant
+        let mut context = FooContext { value: 0 };
+        unsafe {
+            Enum::check_bytes(&Enum::B(5), &mut context).unwrap();
+        }
+
+        assert_eq!(context.value, 5);
+
+        // Struct variant
+        let mut context = FooContext { value: 0 };
+        unsafe {
+            Enum::check_bytes(&Enum::C { value: 7 }, &mut context).unwrap();
+        }
+
+        assert_eq!(context.value, 7);
+    }
+
+    #[test]
+    fn test_derive_verify_closure() {
+        #[derive(CheckBytes)]
+        #[check_bytes(
+            bounds(__C: MyContext),
+            verify = |_, context| { context.set_value(1); Ok(()) },
+        )]
+        struct UnitStruct;
+
+        let mut context = FooContext { value: 0 };
+        unsafe {
+            UnitStruct::check_bytes(&UnitStruct, &mut context).unwrap();
+        }
+
+        assert_eq!(context.value, 1);
+    }
 }

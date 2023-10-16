@@ -14,9 +14,10 @@ mod repr;
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{
-    meta::ParseNestedMeta, parse_macro_input, parse_quote,
-    punctuated::Punctuated, spanned::Spanned, AttrStyle, Data, DeriveInput,
-    Error, Field, Fields, Ident, Index, LitStr, Path, Token, WherePredicate,
+    meta::ParseNestedMeta, parenthesized, parse::Parse, parse_macro_input,
+    parse_quote, punctuated::Punctuated, spanned::Spanned, AttrStyle, Data,
+    DeriveInput, Error, Expr, Field, Fields, Ident, Index, LitStr, Path, Token,
+    WherePredicate,
 };
 
 use repr::Repr;
@@ -26,8 +27,9 @@ use crate::repr::BaseRepr;
 #[derive(Default)]
 struct Attributes {
     pub repr: Repr,
-    pub bound: Option<Punctuated<WherePredicate, Token![,]>>,
+    pub bounds: Option<Punctuated<WherePredicate, Token![,]>>,
     pub crate_path: Option<Path>,
+    pub verify: Option<Expr>,
 }
 
 fn try_set_attribute<T: ToTokens>(
@@ -50,13 +52,18 @@ fn parse_check_bytes_attributes(
     attributes: &mut Attributes,
     meta: ParseNestedMeta<'_>,
 ) -> Result<(), Error> {
-    if meta.path.is_ident("bound") {
-        let lit_str = meta.value()?.parse::<LitStr>()?;
-        let bound = lit_str.parse_with(Punctuated::parse_terminated)?;
-        try_set_attribute(&mut attributes.bound, bound, "bound")
+    if meta.path.is_ident("bounds") {
+        let bounds;
+        parenthesized!(bounds in meta.input);
+        let bounds =
+            bounds.parse_terminated(WherePredicate::parse, Token![,])?;
+        try_set_attribute(&mut attributes.bounds, bounds, "bounds")
     } else if meta.path.is_ident("crate") {
         let crate_path = meta.value()?.parse::<LitStr>()?.parse()?;
         try_set_attribute(&mut attributes.crate_path, crate_path, "crate")
+    } else if meta.path.is_ident("verify") {
+        let verify = meta.value()?.parse::<Expr>()?;
+        try_set_attribute(&mut attributes.verify, verify, "verify")
     } else {
         Err(meta.error("unrecognized check_bytes argument"))
     }
@@ -89,10 +96,11 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
 /// Additional arguments can be specified using the `#[check_bytes(...)]`
 /// attribute:
 ///
-/// - `bound = "..."`: Adds additional bounds to the `CheckBytes`
+/// - `bounds(...)`: Adds additional bounds to the `CheckBytes`
 ///   implementation. This can be especially useful when dealing with recursive
 ///   structures, where bounds may need to be omitted to prevent recursive type
-///   definitions.
+///   definitions. In the context of the added bounds, `__C` is the name of the
+///   context generic (e.g. `__C: MyContext`).
 ///
 /// This derive macro automatically adds a type bound `field: CheckBytes<__C>`
 /// for each field type. This can cause an overflow while evaluating trait
@@ -119,7 +127,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
     let mut impl_input_generics = input.generics.clone();
     let impl_where_clause = impl_input_generics.make_where_clause();
-    if let Some(ref bounds) = attributes.bound {
+    if let Some(ref bounds) = attributes.bounds {
         for clause in bounds {
             impl_where_clause.predicates.push(clause.clone());
         }
@@ -138,6 +146,20 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
     let (struct_generics, ty_generics, where_clause) =
         input.generics.split_for_impl();
     let where_clause = where_clause.unwrap();
+
+    let verify_check = |check_where| {
+        attributes.verify.map(|verify| {
+        quote! {
+            #[inline(always)]
+            fn __verify #impl_generics () -> impl FnOnce(&#name #ty_generics, &mut __C) -> ::core::result::Result<(), __C::Error>
+            #check_where
+            {
+                #verify
+            }
+            __verify()(unsafe { &*value }, context)?;
+        }
+    })
+    };
 
     let check_bytes_impl = match input.data {
         Data::Struct(ref data) => match data.fields {
@@ -171,6 +193,8 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     }
                 });
 
+                let verify_check = verify_check(&check_where);
+
                 quote! {
                     #[automatically_derived]
                     // SAFETY: `check_bytes` only returns `Ok` if all of the
@@ -184,8 +208,8 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             value: *const Self,
                             context: &mut __C,
                         ) -> ::core::result::Result<(), __C::Error> {
-                            let bytes = value.cast::<u8>();
                             #(#field_checks)*
+                            #verify_check
                             Ok(())
                         }
                     }
@@ -224,6 +248,8 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         }
                     });
 
+                let verify_check = verify_check(&check_where);
+
                 quote! {
                     #[automatically_derived]
                     // SAFETY: `check_bytes` only returns `Ok` if all of the
@@ -237,14 +263,16 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             value: *const Self,
                             context: &mut __C,
                         ) -> ::core::result::Result<(), __C::Error> {
-                            let bytes = value.cast::<u8>();
                             #(#field_checks)*
+                            #verify_check
                             Ok(())
                         }
                     }
                 }
             }
             Fields::Unit => {
+                let verify_check = verify_check(impl_where_clause);
+
                 quote! {
                     #[automatically_derived]
                     // SAFETY: Unit structs are always valid since they have a
@@ -256,6 +284,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             value: *const Self,
                             context: &mut __C,
                         ) -> ::core::result::Result<(), __C::Error> {
+                            #verify_check
                             Ok(())
                         }
                     }
@@ -425,6 +454,8 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 )
             };
 
+            let verify_check = verify_check(&check_where);
+
             quote! {
                 #[repr(#repr)]
                 enum Tag {
@@ -459,6 +490,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             #(#tag_variant_values => #check_arms)*
                             _ => #no_matching_tag_arm,
                         }
+                        #verify_check
                         Ok(())
                     }
                 }
