@@ -147,7 +147,7 @@
 pub mod uuid;
 
 #[cfg(not(feature = "simdutf8"))]
-use core::str::{from_utf8, Utf8Error};
+use core::str::from_utf8;
 #[cfg(target_has_atomic = "8")]
 use core::sync::atomic::{AtomicBool, AtomicI8, AtomicU8};
 #[cfg(target_has_atomic = "16")]
