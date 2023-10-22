@@ -10,8 +10,11 @@
 
 #[cfg(test)]
 mod tests {
-    use bytecheck::{CheckBytes, Fallible};
-    use rancor::Failure;
+    use bytecheck::{
+        check_bytes, check_bytes_with_context,
+        rancor::{Contextual, Error, Failure, Infallible},
+        CheckBytes,
+    };
 
     #[derive(Debug)]
     #[repr(transparent)]
@@ -30,11 +33,11 @@ mod tests {
         }
     }
 
-    unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for CharLE {
+    unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for CharLE {
         unsafe fn check_bytes(
             value: *const Self,
             context: &mut C,
-        ) -> Result<(), C::Error> {
+        ) -> Result<(), E> {
             #[cfg(target_endian = "little")]
             {
                 char::check_bytes(value.cast(), context)
@@ -43,90 +46,77 @@ mod tests {
             {
                 let mut bytes = *value.cast::<[u8; 4]>();
                 bytes.reverse();
-                char::check_bytes(bytes.as_ref().as_ptr().cast(), context)?;
-                Ok(&*value.cast())
+                char::check_bytes(bytes.as_ref().as_ptr().cast(), context)
             }
         }
-    }
-
-    fn check_as_bytes<T: CheckBytes<C>, C: Fallible>(
-        value: &T,
-        context: &mut C,
-    ) {
-        unsafe { T::check_bytes(value as *const T, context).unwrap() };
     }
 
     #[repr(C, align(16))]
     struct Aligned<const N: usize>([u8; N]);
 
     macro_rules! bytes {
-        ($($byte:literal,)*) => {
+        ($($byte:literal),* $(,)?) => {
             (&Aligned([$($byte,)*]).0 as &[u8]).as_ptr()
-        };
-        ($($byte:literal),*) => {
-            bytes!($($byte,)*)
-        };
+        }
     }
 
     #[test]
     fn test_tuples() {
-        check_as_bytes(&(42u32, true, 'x'), &mut Failure);
-        check_as_bytes(&(true,), &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&(42u32, true, 'x')).unwrap();
+        }
+        unsafe {
+            check_bytes::<_, Failure>(&(true,)).unwrap();
+        }
 
         unsafe {
             // These tests assume the tuple is packed (u32, bool, char)
-            <(u32, bool, CharLE)>::check_bytes(
+            check_bytes::<(u32, bool, CharLE), Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x78u8, 0u8,
                     0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            <(u32, bool, CharLE)>::check_bytes(
+            check_bytes::<(u32, bool, CharLE), Failure>(
                 bytes![
                     42u8, 16u8, 20u8, 3u8, 1u8, 255u8, 255u8, 255u8, 0x78u8,
                     0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            <(u32, bool, CharLE)>::check_bytes(
+            check_bytes::<(u32, bool, CharLE), Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8,
                     0xd8u8, 0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            <(u32, bool, CharLE)>::check_bytes(
+            check_bytes::<(u32, bool, CharLE), Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8, 0x00u8,
                     0x00u8, 0x11u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            <(u32, bool, CharLE)>::check_bytes(
+            check_bytes::<(u32, bool, CharLE), Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8, 0x78u8, 0u8,
                     0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            <(u32, bool, CharLE)>::check_bytes(
+            check_bytes::<(u32, bool, CharLE), Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8, 0x78u8, 0u8,
                     0u8, 0u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
         }
@@ -134,33 +124,32 @@ mod tests {
 
     #[test]
     fn test_arrays() {
-        check_as_bytes(&[true, false, true, false], &mut Failure);
-        check_as_bytes(&[false, true], &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&[true, false, true, false]).unwrap();
+        }
+        unsafe {
+            check_bytes::<_, Failure>(&[false, true]).unwrap();
+        }
 
         unsafe {
-            <[bool; 4]>::check_bytes(
+            check_bytes::<[bool; 4], Failure>(
                 bytes![1u8, 0u8, 1u8, 0u8].cast(),
-                &mut Failure,
             )
             .unwrap();
-            <[bool; 4]>::check_bytes(
+            check_bytes::<[bool; 4], Failure>(
                 bytes![1u8, 2u8, 1u8, 0u8].cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            <[bool; 4]>::check_bytes(
+            check_bytes::<[bool; 4], Failure>(
                 bytes![2u8, 0u8, 1u8, 0u8].cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            <[bool; 4]>::check_bytes(
+            check_bytes::<[bool; 4], Failure>(
                 bytes![1u8, 0u8, 1u8, 2u8].cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            <[bool; 4]>::check_bytes(
+            check_bytes::<[bool; 4], Failure>(
                 bytes![1u8, 0u8, 1u8, 0u8, 2u8].cast(),
-                &mut Failure,
             )
             .unwrap();
         }
@@ -171,7 +160,9 @@ mod tests {
         #[derive(CheckBytes)]
         struct Test;
 
-        check_as_bytes(&Test, &mut Failure);
+        unsafe {
+            check_bytes::<_, Infallible>(&Test).unwrap();
+        }
     }
 
     #[test]
@@ -181,62 +172,58 @@ mod tests {
 
         let value = Test(42, true, 'x'.into());
 
-        check_as_bytes(&value, &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&value).unwrap();
+        }
 
         unsafe {
             // These tests assume the struct is packed (u32, char, bool)
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
         }
@@ -257,62 +244,58 @@ mod tests {
             c: 'x'.into(),
         };
 
-        check_as_bytes(&value, &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&value).unwrap();
+        }
 
         unsafe {
             // These tests assume the struct is packed (u32, char, bool)
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
         }
@@ -328,28 +311,25 @@ mod tests {
 
         let value = Test { a: 42, b: true };
 
-        check_as_bytes(&value, &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&value).unwrap();
+        }
 
         unsafe {
-            Test::<bool>::check_bytes(
-                bytes![0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8,].cast(),
-                &mut Failure,
+            check_bytes::<Test<bool>, Failure>(
+                bytes![0u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8, 255u8].cast(),
             )
             .unwrap();
-            Test::<bool>::check_bytes(
-                bytes![12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8,]
-                    .cast(),
-                &mut Failure,
+            check_bytes::<Test<bool>, Failure>(
+                bytes![12u8, 34u8, 56u8, 78u8, 1u8, 255u8, 255u8, 255u8].cast(),
             )
             .unwrap();
-            Test::<bool>::check_bytes(
-                bytes![0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8,].cast(),
-                &mut Failure,
+            check_bytes::<Test<bool>, Failure>(
+                bytes![0u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8, 255u8].cast(),
             )
             .unwrap();
-            Test::<bool>::check_bytes(
-                bytes![0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8,].cast(),
-                &mut Failure,
+            check_bytes::<Test<bool>, Failure>(
+                bytes![0u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8, 255u8].cast(),
             )
             .unwrap_err();
         }
@@ -372,7 +352,9 @@ mod tests {
 
         let value = Test::A(42, true, 'x'.into());
 
-        check_as_bytes(&value, &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&value).unwrap();
+        }
 
         let value = Test::B {
             a: 42,
@@ -380,47 +362,47 @@ mod tests {
             c: 'x'.into(),
         };
 
-        check_as_bytes(&value, &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&value).unwrap();
+        }
 
         let value = Test::C;
 
-        check_as_bytes(&value, &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&value).unwrap();
+        }
 
         unsafe {
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     0u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8,
                     255u8, 255u8, 120u8, 0u8, 0u8, 0u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     1u8, 0u8, 0u8, 0u8, 12u8, 34u8, 56u8, 78u8, 1u8, 255u8,
                     255u8, 255u8, 120u8, 0u8, 0u8, 0u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     2u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 25u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap();
-            Test::check_bytes(
+            check_bytes::<Test, Failure>(
                 bytes![
                     3u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8,
                     255u8, 255u8, 255u8, 255u8, 25u8, 255u8, 255u8, 255u8,
                 ]
                 .cast(),
-                &mut Failure,
             )
             .unwrap_err();
         }
@@ -438,32 +420,40 @@ mod tests {
             E,
         }
 
-        check_as_bytes(&Test::A, &mut Failure);
-        check_as_bytes(&Test::B, &mut Failure);
-        check_as_bytes(&Test::C, &mut Failure);
-        check_as_bytes(&Test::D, &mut Failure);
-        check_as_bytes(&Test::E, &mut Failure);
+        unsafe {
+            check_bytes::<_, Failure>(&Test::A).unwrap();
+        }
+        unsafe {
+            check_bytes::<_, Failure>(&Test::B).unwrap();
+        }
+        unsafe {
+            check_bytes::<_, Failure>(&Test::C).unwrap();
+        }
+        unsafe {
+            check_bytes::<_, Failure>(&Test::D).unwrap();
+        }
+        unsafe {
+            check_bytes::<_, Failure>(&Test::E).unwrap();
+        }
 
         unsafe {
-            Test::check_bytes(bytes![1u8].cast(), &mut Failure).unwrap_err();
-            Test::check_bytes(bytes![99u8].cast(), &mut Failure).unwrap_err();
-            Test::check_bytes(bytes![102u8].cast(), &mut Failure).unwrap_err();
-            Test::check_bytes(bytes![199u8].cast(), &mut Failure).unwrap_err();
-            Test::check_bytes(bytes![202u8].cast(), &mut Failure).unwrap_err();
-            Test::check_bytes(bytes![255u8].cast(), &mut Failure).unwrap_err();
+            check_bytes::<Test, Failure>(bytes![1u8].cast()).unwrap_err();
+            check_bytes::<Test, Failure>(bytes![99u8].cast()).unwrap_err();
+            check_bytes::<Test, Failure>(bytes![102u8].cast()).unwrap_err();
+            check_bytes::<Test, Failure>(bytes![199u8].cast()).unwrap_err();
+            check_bytes::<Test, Failure>(bytes![202u8].cast()).unwrap_err();
+            check_bytes::<Test, Failure>(bytes![255u8].cast()).unwrap_err();
         }
     }
 
     #[test]
     fn test_unsized() {
         unsafe {
-            <[i32]>::check_bytes(
-                &[1, 2, 3, 4] as &[i32] as *const [i32],
-                &mut Failure,
+            check_bytes::<[i32], Infallible>(
+                &[1, 2, 3, 4] as &[i32] as *const [i32]
             )
             .unwrap();
-            str::check_bytes("hello world" as *const str, &mut Failure)
-                .unwrap();
+            check_bytes::<str, Failure>("hello world" as *const str).unwrap();
         }
     }
 
@@ -476,8 +466,14 @@ mod tests {
             ($($bytes:expr, $pat:pat,)*) => {
                 $(
                     let bytes = $bytes;
-                    let c_str = ::ptr_meta::from_raw_parts(bytes.as_ptr().cast(), bytes.len());
-                    assert!(matches!(CStr::check_bytes(c_str, &mut Failure), $pat));
+                    let c_str = ::ptr_meta::from_raw_parts(
+                        bytes.as_ptr().cast(),
+                        bytes.len(),
+                    );
+                    assert!(matches!(
+                        check_bytes::<CStr, Failure>(c_str),
+                        $pat,
+                    ));
                 )*
             }
         }
@@ -495,17 +491,19 @@ mod tests {
 
     #[test]
     fn test_recursive() {
-        use bytecheck::Fallible;
-
         struct MyBox<T: ?Sized> {
             inner: *const T,
         }
 
-        unsafe impl<T: CheckBytes<C>, C: Fallible + ?Sized> CheckBytes<C> for MyBox<T> {
+        unsafe impl<T, C, E> CheckBytes<C, E> for MyBox<T>
+        where
+            T: CheckBytes<C, E>,
+            C: ?Sized,
+        {
             unsafe fn check_bytes(
                 value: *const Self,
                 context: &mut C,
-            ) -> Result<(), C::Error> {
+            ) -> Result<(), E> {
                 T::check_bytes((*value).inner, context)?;
                 Ok(())
             }
@@ -523,7 +521,7 @@ mod tests {
             let cons = Node::Cons(MyBox {
                 inner: &nil as *const Node,
             });
-            Node::check_bytes(&cons, &mut Failure).unwrap();
+            check_bytes::<Node, Failure>(&cons).unwrap();
         }
     }
 
@@ -538,13 +536,17 @@ mod tests {
         #[check_bytes(crate = "m::bc")]
         struct Test;
 
-        check_as_bytes(&Test, &mut Failure);
+        unsafe {
+            check_bytes::<_, Infallible>(&Test).unwrap();
+        }
 
         #[derive(CheckBytes)]
         #[check_bytes(crate = "::bytecheck")]
         struct Test2;
 
-        check_as_bytes(&Test2, &mut Failure);
+        unsafe {
+            check_bytes::<_, Infallible>(&Test2).unwrap();
+        }
     }
 
     trait MyContext {
@@ -555,10 +557,6 @@ mod tests {
         value: i32,
     }
 
-    impl Fallible for FooContext {
-        type Error = Failure;
-    }
-
     impl MyContext for FooContext {
         fn set_value(&mut self, value: i32) {
             self.value = value;
@@ -567,10 +565,10 @@ mod tests {
 
     #[test]
     fn test_derive_verify_unit_struct() {
-        fn verify<C: MyContext + Fallible + ?Sized>(
+        fn verify<C: MyContext + ?Sized, E: Contextual>(
             _: &UnitStruct,
             context: &mut C,
-        ) -> Result<(), C::Error> {
+        ) -> Result<(), E> {
             context.set_value(1);
             Ok(())
         }
@@ -584,7 +582,11 @@ mod tests {
 
         let mut context = FooContext { value: 0 };
         unsafe {
-            UnitStruct::check_bytes(&UnitStruct, &mut context).unwrap();
+            check_bytes_with_context::<UnitStruct, _, Infallible>(
+                &UnitStruct,
+                &mut context,
+            )
+            .unwrap();
         }
 
         assert_eq!(context.value, 1);
@@ -592,10 +594,10 @@ mod tests {
 
     #[test]
     fn test_derive_verify_struct() {
-        fn verify<C: MyContext + Fallible + ?Sized>(
+        fn verify<C: MyContext + ?Sized, E: Contextual>(
             value: &Struct,
             context: &mut C,
-        ) -> Result<(), C::Error> {
+        ) -> Result<(), E> {
             context.set_value(value.value);
             Ok(())
         }
@@ -611,7 +613,11 @@ mod tests {
 
         let mut context = FooContext { value: 0 };
         unsafe {
-            Struct::check_bytes(&Struct { value: 4 }, &mut context).unwrap();
+            check_bytes_with_context::<Struct, _, Infallible>(
+                &Struct { value: 4 },
+                &mut context,
+            )
+            .unwrap();
         }
 
         assert_eq!(context.value, 4);
@@ -619,10 +625,10 @@ mod tests {
 
     #[test]
     fn test_derive_verify_tuple_struct() {
-        fn verify<C: MyContext + Fallible + ?Sized>(
+        fn verify<C: MyContext + ?Sized, E: Contextual>(
             value: &TupleStruct,
             context: &mut C,
-        ) -> Result<(), C::Error> {
+        ) -> Result<(), E> {
             context.set_value(value.0);
             Ok(())
         }
@@ -636,7 +642,11 @@ mod tests {
 
         let mut context = FooContext { value: 0 };
         unsafe {
-            TupleStruct::check_bytes(&TupleStruct(10), &mut context).unwrap();
+            check_bytes_with_context::<TupleStruct, _, Infallible>(
+                &TupleStruct(10),
+                &mut context,
+            )
+            .unwrap();
         }
 
         assert_eq!(context.value, 10);
@@ -644,10 +654,10 @@ mod tests {
 
     #[test]
     fn test_derive_verify_enum() {
-        fn verify<C: MyContext + Fallible + ?Sized>(
+        fn verify<C: MyContext + ?Sized, E: Contextual>(
             value: &Enum,
             context: &mut C,
-        ) -> Result<(), C::Error> {
+        ) -> Result<(), E> {
             match value {
                 Enum::A => context.set_value(2),
                 Enum::B(value) => context.set_value(*value),
@@ -671,7 +681,11 @@ mod tests {
         // Unit variant
         let mut context = FooContext { value: 0 };
         unsafe {
-            Enum::check_bytes(&Enum::A, &mut context).unwrap();
+            check_bytes_with_context::<Enum, _, Failure>(
+                &Enum::A,
+                &mut context,
+            )
+            .unwrap();
         }
 
         assert_eq!(context.value, 2);
@@ -679,7 +693,11 @@ mod tests {
         // Tuple variant
         let mut context = FooContext { value: 0 };
         unsafe {
-            Enum::check_bytes(&Enum::B(5), &mut context).unwrap();
+            check_bytes_with_context::<Enum, _, Failure>(
+                &Enum::B(5),
+                &mut context,
+            )
+            .unwrap();
         }
 
         assert_eq!(context.value, 5);
@@ -687,7 +705,11 @@ mod tests {
         // Struct variant
         let mut context = FooContext { value: 0 };
         unsafe {
-            Enum::check_bytes(&Enum::C { value: 7 }, &mut context).unwrap();
+            check_bytes_with_context::<Enum, _, Failure>(
+                &Enum::C { value: 7 },
+                &mut context,
+            )
+            .unwrap();
         }
 
         assert_eq!(context.value, 7);
@@ -704,7 +726,11 @@ mod tests {
 
         let mut context = FooContext { value: 0 };
         unsafe {
-            UnitStruct::check_bytes(&UnitStruct, &mut context).unwrap();
+            check_bytes_with_context::<UnitStruct, _, Infallible>(
+                &UnitStruct,
+                &mut context,
+            )
+            .unwrap();
         }
 
         assert_eq!(context.value, 1);

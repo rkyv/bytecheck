@@ -28,5 +28,4 @@ uuid = { workspace = true, optional = true }
 
 [features]
 default = ["simdutf8", "std"]
-alloc = []
-std = ["alloc", "ptr_meta/std", "rancor/std", "simdutf8?/std"]
+std = ["ptr_meta/std", "rancor/std", "simdutf8?/std"]
