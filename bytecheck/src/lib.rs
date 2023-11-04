@@ -162,7 +162,7 @@ use core::{
     ops, ptr,
 };
 use rancor::{Context, Contextual, Error};
-#[cfg(all(feature = "simdutf8"))]
+#[cfg(feature = "simdutf8")]
 use simdutf8::basic::from_utf8;
 
 pub use bytecheck_derive::CheckBytes;

@@ -4,7 +4,6 @@ description = "Derive macro for bytecheck"
 documentation = "https://docs.rs/bytecheck"
 keywords = ["bytecheck", "validation", "zero-copy", "rkyv"]
 categories = ["encoding"]
-readme = "crates-io.md"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
