@@ -30,4 +30,4 @@ uuid = { version = "1.3", optional = true }
 [features]
 default = ["simdutf8", "std"]
 verbose = []
-std = ["ptr_meta/std", "bytecheck_derive/std", "simdutf8/std"]
+std = ["ptr_meta/std", "bytecheck_derive/std", "simdutf8?/std"]
