@@ -161,7 +161,7 @@ use core::{
     },
     ops, ptr,
 };
-use rancor::{Context, Contextual, Error};
+use rancor::{fail, Error, Fallible, ResultExt as _, Strategy, Trace};
 #[cfg(feature = "simdutf8")]
 use simdutf8::basic::from_utf8;
 
@@ -179,7 +179,7 @@ pub use rancor;
 /// `Self`. Because `value` must always be properly aligned for `Self` and point
 /// to enough bytes to represent the type, this implies that `value` may be
 /// dereferenced safely.
-pub unsafe trait CheckBytes<C: ?Sized, E> {
+pub unsafe trait CheckBytes<C: Fallible + ?Sized> {
     /// Checks whether the given pointer points to a valid value within the
     /// given context.
     ///
@@ -187,8 +187,10 @@ pub unsafe trait CheckBytes<C: ?Sized, E> {
     ///
     /// The passed pointer must be aligned and point to enough initialized bytes
     /// to represent the type.
-    unsafe fn check_bytes(value: *const Self, context: &mut C)
-        -> Result<(), E>;
+    unsafe fn check_bytes(
+        value: *const Self,
+        context: &mut C,
+    ) -> Result<(), C::Error>;
 }
 
 /// Checks whether the given pointer points to a valid value.
@@ -198,12 +200,13 @@ pub unsafe trait CheckBytes<C: ?Sized, E> {
 /// The passed pointer must be aligned and point to enough initialized bytes to
 /// represent the type.
 #[inline]
-pub unsafe fn check_bytes<T: CheckBytes<(), E> + ?Sized, E>(
-    value: *const T,
-) -> Result<(), E> {
-    // SAFETY: The safety conditions of `check_bytes` are the same as the safety
-    // conditions of this function.
-    unsafe { T::check_bytes(value, &mut ()) }
+pub unsafe fn check_bytes<T, E>(value: *const T) -> Result<(), E>
+where
+    T: CheckBytes<Strategy<(), E>> + ?Sized,
+{
+    // SAFETY: The safety conditions of `check_bytes_with_context` are the same
+    // as the safety conditions of this function.
+    unsafe { check_bytes_with_context(value, &mut ()) }
 }
 
 /// Checks whether the given pointer points to a valid value within the given
@@ -218,20 +221,22 @@ pub unsafe fn check_bytes_with_context<T, C, E>(
     context: &mut C,
 ) -> Result<(), E>
 where
-    T: CheckBytes<C, E> + ?Sized,
-    C: ?Sized,
+    T: CheckBytes<Strategy<C, E>> + ?Sized,
 {
     // SAFETY: The safety conditions of `check_bytes` are the same as the safety
     // conditions of this function.
-    unsafe { T::check_bytes(value, context) }
+    unsafe { CheckBytes::check_bytes(value, Strategy::wrap(context)) }
 }
 
 macro_rules! impl_primitive {
     ($type:ty) => {
         // SAFETY: All bit patterns are valid for these primitive types.
-        unsafe impl<C: ?Sized, E> CheckBytes<C, E> for $type {
+        unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for $type {
             #[inline]
-            unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), E> {
+            unsafe fn check_bytes(
+                _: *const Self,
+                _: &mut C,
+            ) -> Result<(), C::Error> {
                 Ok(())
             }
         }
@@ -262,18 +267,18 @@ impl_primitives!(AtomicI32, AtomicU32);
 impl_primitives!(AtomicI64, AtomicU64);
 
 // SAFETY: `PhantomData` is a zero-sized type and so all bit patterns are valid.
-unsafe impl<T: ?Sized, C: ?Sized, E> CheckBytes<C, E> for PhantomData<T> {
+unsafe impl<T: ?Sized, C: Fallible + ?Sized> CheckBytes<C> for PhantomData<T> {
     #[inline]
-    unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), E> {
+    unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), C::Error> {
         Ok(())
     }
 }
 
 // SAFETY: `PhantomPinned` is a zero-sized type and so all bit patterns are
 // valid.
-unsafe impl<C: ?Sized, E> CheckBytes<C, E> for PhantomPinned {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for PhantomPinned {
     #[inline]
-    unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), E> {
+    unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), C::Error> {
         Ok(())
     }
 }
@@ -281,14 +286,17 @@ unsafe impl<C: ?Sized, E> CheckBytes<C, E> for PhantomPinned {
 // SAFETY: `ManuallyDrop<T>` is a `#[repr(transparent)]` wrapper around a `T`,
 // and so `value` points to a valid `ManuallyDrop<T>` if it also points to a
 // valid `T`.
-unsafe impl<T, C, E> CheckBytes<C, E> for ManuallyDrop<T>
+unsafe impl<T, C> CheckBytes<C> for ManuallyDrop<T>
 where
-    T: CheckBytes<C, E> + ?Sized,
-    C: ?Sized,
-    E: Contextual,
+    T: CheckBytes<C> + ?Sized,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
 {
     #[inline]
-    unsafe fn check_bytes(value: *const Self, c: &mut C) -> Result<(), E> {
+    unsafe fn check_bytes(
+        value: *const Self,
+        c: &mut C,
+    ) -> Result<(), C::Error> {
         let inner_ptr =
             // SAFETY: Because `ManuallyDrop<T>` is `#[repr(transparent)]`, a
             // pointer to a `ManuallyDrop<T>` is guaranteed to be the same as a
@@ -302,7 +310,7 @@ where
         // represent it.
         unsafe {
             T::check_bytes(inner_ptr, c)
-                .context("while checking inner value of `ManuallyDrop`")
+                .trace("while checking inner value of `ManuallyDrop`")
         }
     }
 }
@@ -316,8 +324,8 @@ impl fmt::Display for BoolCheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "expected bool byte to be 0 or 1, actual was {}",
-            self.byte
+            "bool set to invalid byte {}, expected either 0 or 1",
+            self.byte,
         )
     }
 }
@@ -327,9 +335,16 @@ impl std::error::Error for BoolCheckError {}
 
 // SAFETY: A bool is a one byte value that must either be 0 or 1. `check_bytes`
 // only returns `Ok` if `value` is 0 or 1.
-unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for bool {
+unsafe impl<C> CheckBytes<C> for bool
+where
+    C: Fallible + ?Sized,
+    C::Error: Error,
+{
     #[inline]
-    unsafe fn check_bytes(value: *const Self, _: &mut C) -> Result<(), E> {
+    unsafe fn check_bytes(
+        value: *const Self,
+        _: &mut C,
+    ) -> Result<(), C::Error> {
         // SAFETY: `value` is a pointer to a `bool`, which has a size and
         // alignment of one. `u8` also has a size and alignment of one, and all
         // bit patterns are valid for `u8`. So we can cast `value` to a `u8`
@@ -337,7 +352,7 @@ unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for bool {
         let byte = unsafe { *value.cast::<u8>() };
         match byte {
             0 | 1 => Ok(()),
-            _ => Err(E::new(BoolCheckError { byte })),
+            _ => fail!(BoolCheckError { byte }),
         }
     }
 }
@@ -345,12 +360,16 @@ unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for bool {
 #[cfg(target_has_atomic = "8")]
 // SAFETY: `AtomicBool` has the same ABI as `bool`, so if `value` points to a
 // valid `bool` then it also points to a valid `AtomicBool`.
-unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for AtomicBool {
+unsafe impl<C> CheckBytes<C> for AtomicBool
+where
+    C: Fallible + ?Sized,
+    C::Error: Error,
+{
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
         context: &mut C,
-    ) -> Result<(), E> {
+    ) -> Result<(), C::Error> {
         // SAFETY: `AtomicBool` has the same ABI as `bool`, so a pointer that is
         // aligned for `AtomicBool` and points to enough bytes for `AtomicBool`
         // is also aligned for `bool` and points to enough bytes for `bool`.
@@ -360,15 +379,19 @@ unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for AtomicBool {
 
 // SAFETY: If `char::try_from` succeeds with the pointed-to-value, then it must
 // be a valid value for `char`.
-unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for char {
+unsafe impl<C> CheckBytes<C> for char
+where
+    C: Fallible + ?Sized,
+    C::Error: Error,
+{
     #[inline]
-    unsafe fn check_bytes(ptr: *const Self, _: &mut C) -> Result<(), E> {
+    unsafe fn check_bytes(ptr: *const Self, _: &mut C) -> Result<(), C::Error> {
         // SAFETY: `char` and `u32` are both four bytes, but we're not
         // guaranteed that they have the same alignment. Using `read_unaligned`
         // ensures that we can read a `u32` regardless and try to convert it to
         // a `char`.
         let value = unsafe { ptr.cast::<u32>().read_unaligned() };
-        char::try_from(value).map_err(E::new)?;
+        char::try_from(value).into_error()?;
         Ok(())
     }
 }
@@ -389,18 +412,18 @@ macro_rules! impl_tuple {
         // SAFETY: A tuple is valid if all of its elements are valid, and
         // `check_bytes` only returns `Ok` when all of the elements validated
         // successfully.
-        unsafe impl<$($type,)* C, E> CheckBytes<C, E> for ($($type,)*)
+        unsafe impl<$($type,)* C> CheckBytes<C> for ($($type,)*)
         where
-            $($type: CheckBytes<C, E>,)*
-            C: ?Sized,
-            E: Contextual,
+            $($type: CheckBytes<C>,)*
+            C: Fallible + ?Sized,
+            C::Error: Trace,
         {
             #[inline]
             #[allow(clippy::unneeded_wildcard_pattern)]
             unsafe fn check_bytes(
                 value: *const Self,
                 context: &mut C,
-            ) -> Result<(), E> {
+            ) -> Result<(), C::Error> {
                 $(
                     // SAFETY: The caller has guaranteed that `value` points to
                     // enough bytes for this tuple and is properly aligned, so
@@ -409,7 +432,7 @@ macro_rules! impl_tuple {
                         <$type>::check_bytes(
                             ptr::addr_of!((*value).$index),
                             context,
-                        ).with_context(|| TupleIndexContext { index: $index })?;
+                        ).with_trace(|| TupleIndexContext { index: $index })?;
                     }
                 )*
                 Ok(())
@@ -451,17 +474,17 @@ impl fmt::Display for ArrayCheckContext {
 // SAFETY: `check_bytes` only returns `Ok` if each element of the array is
 // valid. If each element of the array is valid then the whole array is also
 // valid.
-unsafe impl<T, const N: usize, C, E> CheckBytes<C, E> for [T; N]
+unsafe impl<T, const N: usize, C> CheckBytes<C> for [T; N]
 where
-    T: CheckBytes<C, E>,
-    C: ?Sized,
-    E: Contextual,
+    T: CheckBytes<C>,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
 {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
         context: &mut C,
-    ) -> Result<(), E> {
+    ) -> Result<(), C::Error> {
         let base = value.cast::<T>();
         for index in 0..N {
             // SAFETY: The caller has guaranteed that `value` points to enough
@@ -469,7 +492,7 @@ where
             // pointers to each element and check them.
             unsafe {
                 T::check_bytes(base.add(index), context)
-                    .with_context(|| ArrayCheckContext { index })?;
+                    .with_trace(|| ArrayCheckContext { index })?;
             }
         }
         Ok(())
@@ -490,17 +513,17 @@ impl fmt::Display for SliceCheckContext {
 // SAFETY: `check_bytes` only returns `Ok` if each element of the slice is
 // valid. If each element of the slice is valid then the whole slice is also
 // valid.
-unsafe impl<T, C, E> CheckBytes<C, E> for [T]
+unsafe impl<T, C> CheckBytes<C> for [T]
 where
-    T: CheckBytes<C, E>,
-    C: ?Sized,
-    E: Contextual,
+    T: CheckBytes<C>,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
 {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
         context: &mut C,
-    ) -> Result<(), E> {
+    ) -> Result<(), C::Error> {
         let (data_address, len) = ptr_meta::PtrExt::to_raw_parts(value);
         let base = data_address.cast::<T>();
         for index in 0..len {
@@ -509,7 +532,7 @@ where
             // pointers to each element and check them.
             unsafe {
                 T::check_bytes(base.add(index), context)
-                    .with_context(|| SliceCheckContext { index })?;
+                    .with_trace(|| SliceCheckContext { index })?;
             }
         }
         Ok(())
@@ -518,31 +541,46 @@ where
 
 // SAFETY: `check_bytes` only returns `Ok` if the bytes pointed to by `str` are
 // valid UTF-8. If they are valid UTF-8 then the overall `str` is also valid.
-unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for str {
+unsafe impl<C> CheckBytes<C> for str
+where
+    C: Fallible + ?Sized,
+    C::Error: Error,
+{
     #[inline]
-    unsafe fn check_bytes(value: *const Self, _: &mut C) -> Result<(), E> {
+    unsafe fn check_bytes(
+        value: *const Self,
+        _: &mut C,
+    ) -> Result<(), C::Error> {
         let slice_ptr = value as *const [u8];
         // SAFETY: The caller has guaranteed that `value` is properly-aligned
         // and points to enough bytes for its `str`. Because a `u8` slice has
         // the same layout as a `str`, we can dereference it for UTF-8
         // validation.
         let slice = unsafe { &*slice_ptr };
-        from_utf8(slice).map(|_| ()).map_err(E::new)
+        from_utf8(slice).into_error()?;
+        Ok(())
     }
 }
 
 #[cfg(feature = "std")]
 // SAFETY: `check_bytes` only returns `Ok` when the bytes constitute a valid
 // `CStr` per `CStr::from_bytes_with_nul`.
-unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for std::ffi::CStr {
+unsafe impl<C> CheckBytes<C> for std::ffi::CStr
+where
+    C: Fallible + ?Sized,
+    C::Error: Error,
+{
     #[inline]
-    unsafe fn check_bytes(value: *const Self, _: &mut C) -> Result<(), E> {
+    unsafe fn check_bytes(
+        value: *const Self,
+        _: &mut C,
+    ) -> Result<(), C::Error> {
         let slice_ptr = value as *const [u8];
         // SAFETY: The caller has guaranteed that `value` is properly-aligned
         // and points to enough bytes for its `CStr`. Because a `u8` slice has
         // the same layout as a `CStr`, we can dereference it for validation.
         let slice = unsafe { &*slice_ptr };
-        std::ffi::CStr::from_bytes_with_nul(slice).map_err(E::new)?;
+        std::ffi::CStr::from_bytes_with_nul(slice).into_error()?;
         Ok(())
     }
 }
@@ -660,31 +698,32 @@ impl fmt::Display for UnnamedEnumVariantCheckContext {
 // SAFETY: A `Range<T>` is valid if its `start` and `end` are both valid, and
 // `check_bytes` only returns `Ok` when both `start` and `end` are valid. Note
 // that `Range` does not require `start` be less than `end`.
-unsafe impl<T, C, E> CheckBytes<C, E> for ops::Range<T>
+unsafe impl<T, C> CheckBytes<C> for ops::Range<T>
 where
-    T: CheckBytes<C, E>,
-    C: ?Sized,
-    E: Contextual,
+    T: CheckBytes<C>,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
 {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
         context: &mut C,
-    ) -> Result<(), E> {
+    ) -> Result<(), C::Error> {
         // SAFETY: The caller has guaranteed that `value` is aligned for a
         // `Range<T>` and points to enough initialized bytes for one, so a
         // pointer projected to the `start` field will be properly aligned for
         // a `T` and point to enough initialized bytes for one too.
         unsafe {
-            T::check_bytes(ptr::addr_of!((*value).start), context)
-                .with_context(|| StructCheckContext {
+            T::check_bytes(ptr::addr_of!((*value).start), context).with_trace(
+                || StructCheckContext {
                     struct_name: "Range",
                     field_name: "start",
-                })?;
+                },
+            )?;
         }
         // SAFETY: Same reasoning as above, but for `end`.
         unsafe {
-            T::check_bytes(ptr::addr_of!((*value).end), context).with_context(
+            T::check_bytes(ptr::addr_of!((*value).end), context).with_trace(
                 || StructCheckContext {
                     struct_name: "Range",
                     field_name: "end",
@@ -697,59 +736,60 @@ where
 
 // SAFETY: A `RangeFrom<T>` is valid if its `start` is valid, and `check_bytes`
 // only returns `Ok` when its `start` is valid.
-unsafe impl<T, E, C> CheckBytes<C, E> for ops::RangeFrom<T>
+unsafe impl<T, C> CheckBytes<C> for ops::RangeFrom<T>
 where
-    T: CheckBytes<C, E>,
-    E: Contextual,
-    C: ?Sized,
+    T: CheckBytes<C>,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
 {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
         context: &mut C,
-    ) -> Result<(), E> {
+    ) -> Result<(), C::Error> {
         // SAFETY: The caller has guaranteed that `value` is aligned for a
         // `RangeFrom<T>` and points to enough initialized bytes for one, so a
         // pointer projected to the `start` field will be properly aligned for
         // a `T` and point to enough initialized bytes for one too.
         unsafe {
-            T::check_bytes(ptr::addr_of!((*value).start), context)
-                .with_context(|| StructCheckContext {
+            T::check_bytes(ptr::addr_of!((*value).start), context).with_trace(
+                || StructCheckContext {
                     struct_name: "RangeFrom",
                     field_name: "start",
-                })?;
+                },
+            )?;
         }
         Ok(())
     }
 }
 
 // SAFETY: `RangeFull` is a ZST and so every pointer to one is valid.
-unsafe impl<C: ?Sized, E> CheckBytes<C, E> for ops::RangeFull {
+unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for ops::RangeFull {
     #[inline]
-    unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), E> {
+    unsafe fn check_bytes(_: *const Self, _: &mut C) -> Result<(), C::Error> {
         Ok(())
     }
 }
 
 // SAFETY: A `RangeTo<T>` is valid if its `end` is valid, and `check_bytes` only
 // returns `Ok` when its `end` is valid.
-unsafe impl<T, C, E> CheckBytes<C, E> for ops::RangeTo<T>
+unsafe impl<T, C> CheckBytes<C> for ops::RangeTo<T>
 where
-    T: CheckBytes<C, E>,
-    C: ?Sized,
-    E: Contextual,
+    T: CheckBytes<C>,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
 {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
         context: &mut C,
-    ) -> Result<(), E> {
+    ) -> Result<(), C::Error> {
         // SAFETY: The caller has guaranteed that `value` is aligned for a
         // `RangeTo<T>` and points to enough initialized bytes for one, so a
         // pointer projected to the `end` field will be properly aligned for
         // a `T` and point to enough initialized bytes for one too.
         unsafe {
-            T::check_bytes(ptr::addr_of!((*value).end), context).with_context(
+            T::check_bytes(ptr::addr_of!((*value).end), context).with_trace(
                 || StructCheckContext {
                     struct_name: "RangeTo",
                     field_name: "end",
@@ -762,23 +802,23 @@ where
 
 // SAFETY: A `RangeToInclusive<T>` is valid if its `end` is valid, and
 // `check_bytes` only returns `Ok` when its `end` is valid.
-unsafe impl<T, C, E> CheckBytes<C, E> for ops::RangeToInclusive<T>
+unsafe impl<T, C> CheckBytes<C> for ops::RangeToInclusive<T>
 where
-    T: CheckBytes<C, E>,
-    C: ?Sized,
-    E: Contextual,
+    T: CheckBytes<C>,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
 {
     #[inline]
     unsafe fn check_bytes(
         value: *const Self,
         context: &mut C,
-    ) -> Result<(), E> {
+    ) -> Result<(), C::Error> {
         // SAFETY: The caller has guaranteed that `value` is aligned for a
         // `RangeToInclusive<T>` and points to enough initialized bytes for one,
         // so a pointer projected to the `end` field will be properly aligned
         // for a `T` and point to enough initialized bytes for one too.
         unsafe {
-            T::check_bytes(ptr::addr_of!((*value).end), context).with_context(
+            T::check_bytes(ptr::addr_of!((*value).end), context).with_trace(
                 || StructCheckContext {
                     struct_name: "RangeToInclusive",
                     field_name: "end",
@@ -806,18 +846,22 @@ macro_rules! impl_nonzero {
     ($nonzero:ident, $underlying:ident) => {
         // SAFETY: `check_bytes` only returns `Ok` when `value` is not zero, the
         // only validity condition for non-zero integer types.
-        unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for $nonzero {
+        unsafe impl<C> CheckBytes<C> for $nonzero
+        where
+            C: Fallible + ?Sized,
+            C::Error: Error,
+        {
             #[inline]
             unsafe fn check_bytes(
                 value: *const Self,
                 _: &mut C,
-            ) -> Result<(), E> {
+            ) -> Result<(), C::Error> {
                 // SAFETY: Non-zero integer types are guaranteed to have the
                 // same ABI as their corresponding integer types. Those integers
                 // have no validity requirements, so we can cast and dereference
                 // value to check if it is equal to zero.
                 if unsafe { *value.cast::<$underlying>() } == 0 {
-                    Err(E::new(NonZeroCheckError))
+                    fail!(NonZeroCheckError);
                 } else {
                     Ok(())
                 }

@@ -96,21 +96,20 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
 /// Additional arguments can be specified using the `#[check_bytes(...)]`
 /// attribute:
 ///
-/// - `bounds(...)`: Adds additional bounds to the `CheckBytes`
-///   implementation. This can be especially useful when dealing with recursive
-///   structures, where bounds may need to be omitted to prevent recursive type
-///   definitions. In the context of the added bounds, `__C` is the name of the
-///   context generic (e.g. `__C: MyContext`) and `__E` is the name of the
-///   context error (e.g. `__C: Contextual`).
+/// - `bounds(...)`: Adds additional bounds to the `CheckBytes` implementation.
+///   This can be especially useful when dealing with recursive structures,
+///   where bounds may need to be omitted to prevent recursive type definitions.
+///   In the context of the added bounds, `__C` is the name of the context
+///   generic (e.g. `__C: MyContext`).
 ///
-/// This derive macro automatically adds a type bound
-/// `field: CheckBytes<__C, __E>` for each field type. This can cause an
-/// overflow while evaluating trait bounds if the structure eventually
-/// references its own type, as the implementation of `CheckBytes` for a struct
-/// depends on each field type implementing it as well. Adding the attribute
-/// `#[omit_bounds]` to a field will suppress this trait bound and allow
-/// recursive structures. This may be too coarse for some types, in which case
-/// additional type bounds may be required with `bounds(...)`.
+/// This derive macro automatically adds a type bound `field: CheckBytes<__C>`
+/// for each field type. This can cause an overflow while evaluating trait
+/// bounds if the structure eventually references its own type, as the
+/// implementation of `CheckBytes` for a struct depends on each field type
+/// implementing it as well. Adding the attribute `#[omit_bounds]` to a field
+/// will suppress this trait bound and allow recursive structures. This may be
+/// too coarse for some types, in which case additional type bounds may be
+/// required with `bounds(...)`.
 #[proc_macro_derive(CheckBytes, attributes(check_bytes, omit_bounds))]
 pub fn check_bytes_derive(
     input: proc_macro::TokenStream,
@@ -126,24 +125,28 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
     let crate_path = attributes.crate_path.unwrap_or(parse_quote!(::bytecheck));
 
-    let error_bound = match &input.data {
-        Data::Struct(_) | Data::Union(_) => parse_quote! {
-            __E: #crate_path::rancor::Contextual
-        },
-        Data::Enum(_) => parse_quote! {
-            __E: #crate_path::rancor::Error
-        },
-    };
-
     let mut input_generics = input.generics.clone();
     let impl_where_clause = input_generics.make_where_clause();
+    impl_where_clause.predicates.push(match &input.data {
+        Data::Struct(_) | Data::Union(_) => parse_quote! {
+            <
+                __C as #crate_path::rancor::Fallible
+            >::Error: #crate_path::rancor::Trace
+        },
+        Data::Enum(_) => parse_quote! {
+            <
+                __C as #crate_path::rancor::Fallible
+            >::Error: #crate_path::rancor::Error
+        },
+    });
     if let Some(ref bounds) = attributes.bounds {
         for clause in bounds {
             impl_where_clause.predicates.push(clause.clone());
         }
     }
-    input_generics.params.push(parse_quote! { __C: ?Sized });
-    input_generics.params.push(error_bound);
+    input_generics.params.push(parse_quote! {
+        __C: #crate_path::rancor::Fallible + ?Sized
+    });
 
     let name = &input.ident;
 
@@ -163,7 +166,10 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 ) -> impl FnOnce(
                     &#name #ty_generics,
                     &mut __C,
-                ) -> ::core::result::Result<(), __E>
+                ) -> ::core::result::Result<
+                    (),
+                    <__C as #crate_path::rancor::Fallible>::Error,
+                >
                 #check_where
                 {
                     #verify
@@ -182,7 +188,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 }) {
                     let ty = &field.ty;
                     check_where.predicates.push(
-                        parse_quote! { #ty: #crate_path::CheckBytes<__C, __E> },
+                        parse_quote! { #ty: #crate_path::CheckBytes<__C> },
                     );
                 }
 
@@ -190,13 +196,15 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     let field = &f.ident;
                     let ty = &f.ty;
                     quote! {
-                        <#ty as #crate_path::CheckBytes<__C, __E>>::check_bytes(
+                        <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
                             ::core::ptr::addr_of!((*value).#field),
                             context
                         ).map_err(|e| {
                             <
-                                __E as #crate_path::rancor::Contextual
-                            >::add_context(
+                                <
+                                    __C as #crate_path::rancor::Fallible
+                                >::Error as #crate_path::rancor::Trace
+                            >::trace(
                                 e,
                                 #crate_path::StructCheckContext {
                                     struct_name: ::core::stringify!(#name),
@@ -215,13 +223,16 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     // fields of the struct are valid. If all of the fields are
                     // valid, then the overall struct is also valid.
                     unsafe impl #impl_generics
-                        #crate_path::CheckBytes<__C, __E> for #name #ty_generics
+                        #crate_path::CheckBytes<__C> for #name #ty_generics
                     #check_where
                     {
                         unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
-                        ) -> ::core::result::Result<(), __E> {
+                        ) -> ::core::result::Result<
+                            (),
+                            <__C as #crate_path::rancor::Fallible>::Error,
+                        > {
                             #(#field_checks)*
                             #verify_check
                             Ok(())
@@ -235,9 +246,9 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds"))
                 }) {
                     let ty = &field.ty;
-                    check_where.predicates.push(
-                        parse_quote! { #ty: #crate_path::CheckBytes<__C, __E> },
-                    );
+                    check_where.predicates.push(parse_quote! {
+                        #ty: #crate_path::CheckBytes<__C>
+                    });
                 }
 
                 let field_checks =
@@ -246,14 +257,16 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         let index = Index::from(i);
                         quote! {
                             <
-                                #ty as #crate_path::CheckBytes<__C, __E>
+                                #ty as #crate_path::CheckBytes<__C>
                             >::check_bytes(
                                 ::core::ptr::addr_of!((*value).#index),
                                 context
                             ).map_err(|e| {
                                 <
-                                    __E as #crate_path::rancor::Contextual
-                                >::add_context(
+                                    <
+                                        __C as #crate_path::rancor::Fallible
+                                    >::Error as #crate_path::rancor::Trace
+                                >::trace(
                                     e,
                                     #crate_path::TupleStructCheckContext {
                                         tuple_struct_name: ::core::stringify!(
@@ -274,13 +287,16 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     // fields of the struct are valid. If all of the fields are
                     // valid, then the overall struct is also valid.
                     unsafe impl #impl_generics
-                        #crate_path::CheckBytes<__C, __E> for #name #ty_generics
+                        #crate_path::CheckBytes<__C> for #name #ty_generics
                     #check_where
                     {
                         unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
-                        ) -> ::core::result::Result<(), __E> {
+                        ) -> ::core::result::Result<
+                            (),
+                            <__C as #crate_path::rancor::Fallible>::Error,
+                        > {
                             #(#field_checks)*
                             #verify_check
                             Ok(())
@@ -296,13 +312,16 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     // SAFETY: Unit structs are always valid since they have a
                     // size of 0 and no invalid bit patterns.
                     unsafe impl #impl_generics
-                        #crate_path::CheckBytes<__C, __E> for #name #ty_generics
+                        #crate_path::CheckBytes<__C> for #name #ty_generics
                     #impl_where_clause
                     {
                         unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
-                        ) -> ::core::result::Result<(), __E> {
+                        ) -> ::core::result::Result<
+                            (),
+                            <__C as #crate_path::rancor::Fallible>::Error,
+                        > {
                             #verify_check
                             Ok(())
                         }
@@ -342,7 +361,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         }) {
                             let ty = &field.ty;
                             check_where.predicates.push(parse_quote! {
-                                #ty: #crate_path::CheckBytes<__C, __E>
+                                #ty: #crate_path::CheckBytes<__C>
                             });
                         }
                     }
@@ -354,7 +373,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         }) {
                             let ty = &field.ty;
                             check_where.predicates.push(parse_quote! {
-                                #ty: #crate_path::CheckBytes<__C, __E>
+                                #ty: #crate_path::CheckBytes<__C>
                             });
                         }
                     }
@@ -464,7 +483,11 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
             let no_matching_tag_arm = quote! {
                 return Err(
-                    <__E as #crate_path::rancor::Error>::new(
+                    <
+                        <
+                            __C as #crate_path::rancor::Fallible
+                        >::Error as #crate_path::rancor::Error
+                    >::new(
                         #crate_path::InvalidEnumDiscriminantError {
                             enum_name: ::core::stringify!(#name),
                             invalid_discriminant: tag,
@@ -500,13 +523,16 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     // indicated variant struct are valid, then the overall enum
                     // is valid.
                     unsafe impl #impl_generics
-                        #crate_path::CheckBytes<__C, __E> for #name #ty_generics
+                        #crate_path::CheckBytes<__C> for #name #ty_generics
                     #check_where
                     {
                         unsafe fn check_bytes(
                             value: *const Self,
                             context: &mut __C,
-                        ) -> ::core::result::Result<(), __E> {
+                        ) -> ::core::result::Result<
+                            (),
+                            <__C as #crate_path::rancor::Fallible>::Error,
+                        > {
                             let tag = *value.cast::<#repr>();
                             match tag {
                                 #(#tag_variant_values => #check_arms)*
@@ -539,17 +565,23 @@ fn check_arm_named_field(
     let field_name = &f.ident;
     let ty = &f.ty;
     quote! {
-        <#ty as #crate_path::CheckBytes<__C, __E>>::check_bytes(
+        <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
             ::core::ptr::addr_of!((*value).#field_name),
             context
-        ).map_err(|e| <__E as #crate_path::rancor::Contextual>::add_context(
-            e,
-            #crate_path::NamedEnumVariantCheckContext {
-                enum_name: ::core::stringify!(#name),
-                variant_name: ::core::stringify!(#variant),
-                field_name: ::core::stringify!(#field_name),
-            },
-        ))?;
+        ).map_err(|e| {
+            <
+                <
+                    __C as #crate_path::rancor::Fallible
+                >::Error as #crate_path::rancor::Trace
+            >::trace(
+                e,
+                #crate_path::NamedEnumVariantCheckContext {
+                    enum_name: ::core::stringify!(#name),
+                    variant_name: ::core::stringify!(#variant),
+                    field_name: ::core::stringify!(#field_name),
+                },
+            )
+        })?;
     }
 }
 
@@ -563,16 +595,22 @@ fn check_arm_unnamed_field(
     let ty = &f.ty;
     let index = Index::from(i + 1);
     quote! {
-        <#ty as #crate_path::CheckBytes<__C, __E>>::check_bytes(
+        <#ty as #crate_path::CheckBytes<__C>>::check_bytes(
             ::core::ptr::addr_of!((*value).#index),
             context
-        ).map_err(|e| <__E as #crate_path::rancor::Contextual>::add_context(
-            e,
-            #crate_path::UnnamedEnumVariantCheckContext {
-                enum_name: ::core::stringify!(#name),
-                variant_name: ::core::stringify!(#variant),
-                field_index: #index,
-            },
-        ))?;
+        ).map_err(|e| {
+            <
+                <
+                    __C as #crate_path::rancor::Fallible
+                >::Error as #crate_path::rancor::Trace
+            >::trace(
+                e,
+                #crate_path::UnnamedEnumVariantCheckContext {
+                    enum_name: ::core::stringify!(#name),
+                    variant_name: ::core::stringify!(#variant),
+                    field_index: #index,
+                },
+            )
+        })?;
     }
 }

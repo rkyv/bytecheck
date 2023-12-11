@@ -12,9 +12,10 @@
 mod tests {
     use bytecheck::{
         check_bytes, check_bytes_with_context,
-        rancor::{Contextual, Error, Failure, Infallible},
+        rancor::{Error, Failure, Fallible, Infallible},
         CheckBytes,
     };
+    use rancor::Strategy;
 
     #[derive(Debug)]
     #[repr(transparent)]
@@ -33,11 +34,15 @@ mod tests {
         }
     }
 
-    unsafe impl<C: ?Sized, E: Error> CheckBytes<C, E> for CharLE {
+    unsafe impl<C> CheckBytes<C> for CharLE
+    where
+        C: Fallible + ?Sized,
+        C::Error: Error,
+    {
         unsafe fn check_bytes(
             value: *const Self,
             context: &mut C,
-        ) -> Result<(), E> {
+        ) -> Result<(), C::Error> {
             #[cfg(target_endian = "little")]
             {
                 char::check_bytes(value.cast(), context)
@@ -495,15 +500,15 @@ mod tests {
             inner: *const T,
         }
 
-        unsafe impl<T, C, E> CheckBytes<C, E> for MyBox<T>
+        unsafe impl<T, C> CheckBytes<C> for MyBox<T>
         where
-            T: CheckBytes<C, E>,
-            C: ?Sized,
+            T: CheckBytes<C>,
+            C: Fallible + ?Sized,
         {
             unsafe fn check_bytes(
                 value: *const Self,
                 context: &mut C,
-            ) -> Result<(), E> {
+            ) -> Result<(), C::Error> {
                 T::check_bytes((*value).inner, context)?;
                 Ok(())
             }
@@ -553,6 +558,12 @@ mod tests {
         fn set_value(&mut self, value: i32);
     }
 
+    impl<T: MyContext, E> MyContext for Strategy<T, E> {
+        fn set_value(&mut self, value: i32) {
+            T::set_value(self, value)
+        }
+    }
+
     struct FooContext {
         value: i32,
     }
@@ -565,10 +576,10 @@ mod tests {
 
     #[test]
     fn test_derive_verify_unit_struct() {
-        fn verify<C: MyContext + ?Sized, E: Contextual>(
+        fn verify<C: Fallible + MyContext + ?Sized>(
             _: &UnitStruct,
             context: &mut C,
-        ) -> Result<(), E> {
+        ) -> Result<(), C::Error> {
             context.set_value(1);
             Ok(())
         }
@@ -582,7 +593,7 @@ mod tests {
 
         let mut context = FooContext { value: 0 };
         unsafe {
-            check_bytes_with_context::<UnitStruct, _, Infallible>(
+            check_bytes_with_context::<_, _, Infallible>(
                 &UnitStruct,
                 &mut context,
             )
@@ -594,10 +605,10 @@ mod tests {
 
     #[test]
     fn test_derive_verify_struct() {
-        fn verify<C: MyContext + ?Sized, E: Contextual>(
+        fn verify<C: Fallible + MyContext + ?Sized>(
             value: &Struct,
             context: &mut C,
-        ) -> Result<(), E> {
+        ) -> Result<(), C::Error> {
             context.set_value(value.value);
             Ok(())
         }
@@ -613,7 +624,7 @@ mod tests {
 
         let mut context = FooContext { value: 0 };
         unsafe {
-            check_bytes_with_context::<Struct, _, Infallible>(
+            check_bytes_with_context::<_, _, Infallible>(
                 &Struct { value: 4 },
                 &mut context,
             )
@@ -625,10 +636,10 @@ mod tests {
 
     #[test]
     fn test_derive_verify_tuple_struct() {
-        fn verify<C: MyContext + ?Sized, E: Contextual>(
+        fn verify<C: Fallible + MyContext + ?Sized>(
             value: &TupleStruct,
             context: &mut C,
-        ) -> Result<(), E> {
+        ) -> Result<(), C::Error> {
             context.set_value(value.0);
             Ok(())
         }
@@ -642,7 +653,7 @@ mod tests {
 
         let mut context = FooContext { value: 0 };
         unsafe {
-            check_bytes_with_context::<TupleStruct, _, Infallible>(
+            check_bytes_with_context::<_, _, Infallible>(
                 &TupleStruct(10),
                 &mut context,
             )
@@ -654,10 +665,10 @@ mod tests {
 
     #[test]
     fn test_derive_verify_enum() {
-        fn verify<C: MyContext + ?Sized, E: Contextual>(
+        fn verify<C: Fallible + MyContext + ?Sized>(
             value: &Enum,
             context: &mut C,
-        ) -> Result<(), E> {
+        ) -> Result<(), C::Error> {
             match value {
                 Enum::A => context.set_value(2),
                 Enum::B(value) => context.set_value(*value),
@@ -681,11 +692,8 @@ mod tests {
         // Unit variant
         let mut context = FooContext { value: 0 };
         unsafe {
-            check_bytes_with_context::<Enum, _, Failure>(
-                &Enum::A,
-                &mut context,
-            )
-            .unwrap();
+            check_bytes_with_context::<_, _, Failure>(&Enum::A, &mut context)
+                .unwrap();
         }
 
         assert_eq!(context.value, 2);
@@ -693,7 +701,7 @@ mod tests {
         // Tuple variant
         let mut context = FooContext { value: 0 };
         unsafe {
-            check_bytes_with_context::<Enum, _, Failure>(
+            check_bytes_with_context::<_, _, Failure>(
                 &Enum::B(5),
                 &mut context,
             )
@@ -705,7 +713,7 @@ mod tests {
         // Struct variant
         let mut context = FooContext { value: 0 };
         unsafe {
-            check_bytes_with_context::<Enum, _, Failure>(
+            check_bytes_with_context::<_, _, Failure>(
                 &Enum::C { value: 7 },
                 &mut context,
             )
@@ -726,7 +734,7 @@ mod tests {
 
         let mut context = FooContext { value: 0 };
         unsafe {
-            check_bytes_with_context::<UnitStruct, _, Infallible>(
+            check_bytes_with_context::<_, _, Infallible>(
                 &UnitStruct,
                 &mut context,
             )
