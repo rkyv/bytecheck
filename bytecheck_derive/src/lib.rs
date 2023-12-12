@@ -16,7 +16,7 @@ use quote::{quote, ToTokens};
 use syn::{
     meta::ParseNestedMeta, parenthesized, parse::Parse, parse_macro_input,
     parse_quote, punctuated::Punctuated, spanned::Spanned, AttrStyle, Data,
-    DeriveInput, Error, Expr, Field, Fields, Ident, Index, LitStr, Path, Token,
+    DeriveInput, Error, Field, Fields, Ident, Index, LitStr, Path, Token,
     WherePredicate,
 };
 
@@ -29,7 +29,7 @@ struct Attributes {
     pub repr: Repr,
     pub bounds: Option<Punctuated<WherePredicate, Token![,]>>,
     pub crate_path: Option<Path>,
-    pub verify: Option<Expr>,
+    pub verify: Option<Path>,
 }
 
 fn try_set_attribute<T: ToTokens>(
@@ -62,8 +62,11 @@ fn parse_check_bytes_attributes(
         let crate_path = meta.value()?.parse::<LitStr>()?.parse()?;
         try_set_attribute(&mut attributes.crate_path, crate_path, "crate")
     } else if meta.path.is_ident("verify") {
-        let verify = meta.value()?.parse::<Expr>()?;
-        try_set_attribute(&mut attributes.verify, verify, "verify")
+        if !meta.input.is_empty() && !meta.input.peek(Token![,]) {
+            return Err(meta.error("verify argument must be a path"));
+        }
+
+        try_set_attribute(&mut attributes.verify, meta.path, "verify")
     } else {
         Err(meta.error("unrecognized check_bytes argument"))
     }
@@ -125,64 +128,74 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
     let crate_path = attributes.crate_path.unwrap_or(parse_quote!(::bytecheck));
 
-    let mut input_generics = input.generics.clone();
-    let impl_where_clause = input_generics.make_where_clause();
-    impl_where_clause.predicates.push(match &input.data {
+    let name = &input.ident;
+
+    let mut trait_generics = input.generics.clone();
+
+    // Split type generics for use later
+    input.generics.make_where_clause();
+    let (type_impl_generics, type_ty_generics, type_where_clause) =
+        input.generics.split_for_impl();
+    let type_where_clause = type_where_clause.unwrap();
+
+    // Trait generics are created by modifying the type generics.
+
+    // We add a context parameter __C for the CheckBytes type parameter.
+    trait_generics.params.push(parse_quote! {
+        __C: #crate_path::rancor::Fallible + ?Sized
+    });
+    // We add context error bounds to the where clause for the trait impl.
+    let trait_where_clause = trait_generics.make_where_clause();
+    trait_where_clause.predicates.push(match &input.data {
+        // Structs and unions just propagate any errors from checking their
+        // fields, so the error type of the context just needs to be `Trace`.
         Data::Struct(_) | Data::Union(_) => parse_quote! {
             <
                 __C as #crate_path::rancor::Fallible
             >::Error: #crate_path::rancor::Trace
         },
+        // Enums may error while checking the discriminant, so the error type of
+        // the context needs to implement `Error` so we can create a new error
+        // from an `InvalidEnumDiscriminantError`.
         Data::Enum(_) => parse_quote! {
             <
                 __C as #crate_path::rancor::Fallible
             >::Error: #crate_path::rancor::Error
         },
     });
+    // If the user specified any aditional bounds, we add them to the where
+    // clause.
     if let Some(ref bounds) = attributes.bounds {
         for clause in bounds {
-            impl_where_clause.predicates.push(clause.clone());
+            trait_where_clause.predicates.push(clause.clone());
         }
     }
-    input_generics.params.push(parse_quote! {
-        __C: #crate_path::rancor::Fallible + ?Sized
-    });
-
-    let name = &input.ident;
-
-    let (impl_generics, _, impl_where_clause) = input_generics.split_for_impl();
-    let impl_where_clause = impl_where_clause.unwrap();
-
-    input.generics.make_where_clause();
-    let (struct_generics, ty_generics, where_clause) =
-        input.generics.split_for_impl();
-    let where_clause = where_clause.unwrap();
-
-    let verify_check = |check_where| {
-        attributes.verify.map(|verify| {
-            quote! {
-                #[inline(always)]
-                fn __verify #impl_generics (
-                ) -> impl FnOnce(
-                    &#name #ty_generics,
-                    &mut __C,
-                ) -> ::core::result::Result<
-                    (),
-                    <__C as #crate_path::rancor::Fallible>::Error,
-                >
-                #check_where
-                {
-                    #verify
-                }
-                __verify()(unsafe { &*value }, context)?;
-            }
+    // If the user specified `verify`, then we need to bound `Self: Verify<__C>`
+    // so we can call `Verify::verify`.
+    let verify = if attributes.verify.is_some() {
+        trait_where_clause.predicates.push(parse_quote!(
+            #name #type_ty_generics: #crate_path::Verify<__C>
+        ));
+        Some(quote! {
+            <#name #type_ty_generics as #crate_path::Verify<__C>>::verify(
+                unsafe { &*value },
+                context,
+            )?;
         })
+    } else {
+        None
     };
 
+    // Split trait generics for use later
+    let (trait_impl_generics, _, trait_where_clause) =
+        trait_generics.split_for_impl();
+    let trait_where_clause = trait_where_clause.unwrap();
+
+    // Build CheckBytes impl
     let check_bytes_impl = match input.data {
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => {
-                let mut check_where = impl_where_clause.clone();
+                let mut check_where = trait_where_clause.clone();
                 for field in fields.named.iter().filter(|f| {
                     !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds"))
                 }) {
@@ -215,15 +228,13 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     }
                 });
 
-                let verify_check = verify_check(&check_where);
-
                 quote! {
                     #[automatically_derived]
                     // SAFETY: `check_bytes` only returns `Ok` if all of the
                     // fields of the struct are valid. If all of the fields are
                     // valid, then the overall struct is also valid.
-                    unsafe impl #impl_generics
-                        #crate_path::CheckBytes<__C> for #name #ty_generics
+                    unsafe impl #trait_impl_generics
+                        #crate_path::CheckBytes<__C> for #name #type_ty_generics
                     #check_where
                     {
                         unsafe fn check_bytes(
@@ -234,14 +245,14 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             <__C as #crate_path::rancor::Fallible>::Error,
                         > {
                             #(#field_checks)*
-                            #verify_check
+                            #verify
                             Ok(())
                         }
                     }
                 }
             }
             Fields::Unnamed(ref fields) => {
-                let mut check_where = impl_where_clause.clone();
+                let mut check_where = trait_where_clause.clone();
                 for field in fields.unnamed.iter().filter(|f| {
                     !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds"))
                 }) {
@@ -279,15 +290,13 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         }
                     });
 
-                let verify_check = verify_check(&check_where);
-
                 quote! {
                     #[automatically_derived]
                     // SAFETY: `check_bytes` only returns `Ok` if all of the
                     // fields of the struct are valid. If all of the fields are
                     // valid, then the overall struct is also valid.
-                    unsafe impl #impl_generics
-                        #crate_path::CheckBytes<__C> for #name #ty_generics
+                    unsafe impl #trait_impl_generics
+                        #crate_path::CheckBytes<__C> for #name #type_ty_generics
                     #check_where
                     {
                         unsafe fn check_bytes(
@@ -298,22 +307,20 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             <__C as #crate_path::rancor::Fallible>::Error,
                         > {
                             #(#field_checks)*
-                            #verify_check
+                            #verify
                             Ok(())
                         }
                     }
                 }
             }
             Fields::Unit => {
-                let verify_check = verify_check(impl_where_clause);
-
                 quote! {
                     #[automatically_derived]
                     // SAFETY: Unit structs are always valid since they have a
                     // size of 0 and no invalid bit patterns.
-                    unsafe impl #impl_generics
-                        #crate_path::CheckBytes<__C> for #name #ty_generics
-                    #impl_where_clause
+                    unsafe impl #trait_impl_generics
+                        #crate_path::CheckBytes<__C> for #name #type_ty_generics
+                    #trait_where_clause
                     {
                         unsafe fn check_bytes(
                             value: *const Self,
@@ -322,7 +329,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             (),
                             <__C as #crate_path::rancor::Fallible>::Error,
                         > {
-                            #verify_check
+                            #verify
                             Ok(())
                         }
                     }
@@ -350,7 +357,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 Some((BaseRepr::Int(i), _)) => i,
             };
 
-            let mut check_where = impl_where_clause.clone();
+            let mut check_where = trait_where_clause.clone();
             for v in data.variants.iter() {
                 match v.fields {
                     Fields::Named(ref fields) => {
@@ -416,13 +423,13 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         });
                         quote! {
                             #[repr(C)]
-                            struct #variant_name #struct_generics
-                            #where_clause
+                            struct #variant_name #type_impl_generics
+                            #type_where_clause
                             {
                                 __tag: Tag,
                                 #(#fields,)*
                                 __phantom: ::core::marker::PhantomData<
-                                    #name #ty_generics
+                                    #name #type_ty_generics
                                 >,
                             }
                         }
@@ -434,11 +441,13 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         });
                         quote! {
                             #[repr(C)]
-                            struct #variant_name #struct_generics (
+                            struct #variant_name #type_impl_generics (
                                 Tag,
                                 #(#fields,)*
-                                ::core::marker::PhantomData<#name #ty_generics>
-                            ) #where_clause;
+                                ::core::marker::PhantomData<
+                                    #name #type_ty_generics
+                                >
+                            ) #type_where_clause;
                         }
                     }
                     Fields::Unit => quote! {},
@@ -456,7 +465,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         });
                         quote! { {
                             let value =
-                                value.cast::<#variant_name #ty_generics>();
+                                value.cast::<#variant_name #type_ty_generics>();
                             #(#checks)*
                         } }
                     }
@@ -473,7 +482,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             });
                         quote! { {
                             let value =
-                                value.cast::<#variant_name #ty_generics>();
+                                value.cast::<#variant_name #type_ty_generics>();
                             #(#checks)*
                         } }
                     }
@@ -495,8 +504,6 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     )
                 )
             };
-
-            let verify_check = verify_check(&check_where);
 
             quote! {
                 const _: () = {
@@ -522,8 +529,8 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     // If the discriminant is valid and the fields of the
                     // indicated variant struct are valid, then the overall enum
                     // is valid.
-                    unsafe impl #impl_generics
-                        #crate_path::CheckBytes<__C> for #name #ty_generics
+                    unsafe impl #trait_impl_generics
+                        #crate_path::CheckBytes<__C> for #name #type_ty_generics
                     #check_where
                     {
                         unsafe fn check_bytes(
@@ -538,7 +545,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                 #(#tag_variant_values => #check_arms)*
                                 _ => #no_matching_tag_arm,
                             }
-                            #verify_check
+                            #verify
                             Ok(())
                         }
                     }

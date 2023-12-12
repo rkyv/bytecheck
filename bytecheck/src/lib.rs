@@ -193,6 +193,19 @@ pub unsafe trait CheckBytes<C: Fallible + ?Sized> {
     ) -> Result<(), C::Error>;
 }
 
+/// A type that can check whether its invariants are upheld.
+///
+/// # Safety
+///
+/// - `verify` must only return `Ok` if all of the invariants of this type are
+///   upheld by `self`.
+/// - `verify` may not assume that its type invariants are upheld by the given
+///   `self.`
+pub unsafe trait Verify<C: Fallible + ?Sized> {
+    /// Checks whether the invariants of this type are upheld by `self`.
+    fn verify(&self, context: &mut C) -> Result<(), C::Error>;
+}
+
 /// Checks whether the given pointer points to a valid value.
 ///
 /// # Safety

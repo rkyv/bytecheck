@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.8.0-pre3"
+version = "0.8.0-pre4"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -15,8 +15,8 @@ documentation = "https://docs.rs/bytecheck"
 repository = "https://github.com/rkyv/bytecheck"
 
 [workspace.dependencies]
-bytecheck = { version = "0.8.0-pre3", path = "bytecheck", default-feature = false }
-bytecheck_derive = { version = "0.8.0-pre3", path = "bytecheck_derive", default-features = false }
+bytecheck = { version = "0.8.0-pre4", path = "bytecheck", default-feature = false }
+bytecheck_derive = { version = "0.8.0-pre4", path = "bytecheck_derive", default-features = false }
 proc-macro2 = { version = "1.0", default-features = false }
 ptr_meta = { version = "0.3.0-pre1", default-features = false }
 rancor = { version = "0.1.0-pre6", default-features = false }
