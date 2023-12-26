@@ -13,7 +13,7 @@ use proc_macro2::{Group, Span, TokenStream, TokenTree};
 use quote::{quote, quote_spanned};
 use syn::{
     parse_macro_input, parse_quote, punctuated::Punctuated, spanned::Spanned, AttrStyle, Data,
-    DeriveInput, Error, Fields, Ident, Index, Lit, LitStr, Meta, NestedMeta, Path, Token,
+    DeriveInput, Error, Fields, Ident, Index, LitStr, Meta, Path, meta::ParseNestedMeta, Token,
     WherePredicate,
 };
 
@@ -32,56 +32,48 @@ struct Attributes {
     pub bytecheck_crate: Option<Path>,
 }
 
-fn parse_check_bytes_attributes(attributes: &mut Attributes, meta: &Meta) -> Result<(), Error> {
-    match meta {
-        Meta::NameValue(meta) => {
-            if meta.path.is_ident("bound") {
-                if let Lit::Str(ref lit_str) = meta.lit {
-                    if attributes.bound.is_none() {
-                        attributes.bound = Some(lit_str.clone());
-                        Ok(())
-                    } else {
-                        Err(Error::new_spanned(
-                            meta,
-                            "check_bytes bound already specified",
-                        ))
-                    }
-                } else {
-                    Err(Error::new_spanned(
-                        &meta.lit,
-                        "bound arguments must be a string",
-                    ))
-                }
-            } else if meta.path.is_ident("crate") {
-                if let Lit::Str(ref lit_str) = meta.lit {
-                    if attributes.bytecheck_crate.is_none() {
-                        let tokens = respan(syn::parse_str(&lit_str.value())?, lit_str.span());
-                        let parsed: Path = syn::parse2(tokens)?;
-                        attributes.bytecheck_crate = Some(parsed);
-                        Ok(())
-                    } else {
-                        Err(Error::new_spanned(
-                            meta,
-                            "check_bytes crate already specified",
-                        ))
-                    }
-                } else {
-                    Err(Error::new_spanned(
-                        &meta.lit,
-                        "crate argument must be a string",
-                    ))
-                }
+fn parse_check_bytes_attributes(attributes: &mut Attributes, meta: ParseNestedMeta<'_>) -> Result<(), Error> {
+    if meta.path.is_ident("bound") {
+        if let Ok(lit_str) = meta.input.parse::<LitStr>() {
+            if attributes.bound.is_none() {
+                attributes.bound = Some(lit_str);
+                Ok(())
             } else {
                 Err(Error::new_spanned(
-                    &meta.path,
-                    "unrecognized check_bytes argument",
+                    meta.path,
+                    "check_bytes bound already specified",
                 ))
             }
+        } else {
+            Err(Error::new_spanned(
+                meta.path,
+                "bound arguments must be a string",
+            ))
         }
-        _ => Err(Error::new_spanned(
-            meta,
+    } else if meta.path.is_ident("crate") {
+        if let Ok(lit_str) = meta.input.parse::<LitStr>() {
+            if attributes.bytecheck_crate.is_none() {
+                let tokens = respan(syn::parse_str(&lit_str.value())?, lit_str.span());
+                let parsed: Path = syn::parse2(tokens)?;
+                attributes.bytecheck_crate = Some(parsed);
+                Ok(())
+            } else {
+                Err(Error::new_spanned(
+                    meta.path,
+                    "check_bytes crate already specified",
+                ))
+            }
+        } else {
+            Err(Error::new_spanned(
+                meta.path,
+                "crate argument must be a string",
+            ))
+        }
+    } else {
+        Err(Error::new_spanned(
+            &meta.path,
             "unrecognized check_bytes argument",
-        )),
+        ))
     }
 }
 
@@ -89,52 +81,44 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
     let mut result = Attributes::default();
     for a in input.attrs.iter() {
         if let AttrStyle::Outer = a.style {
-            if let Ok(Meta::List(meta)) = a.parse_meta() {
+            if let Meta::List(ref meta) = a.meta {
                 if meta.path.is_ident("check_bytes") {
-                    for nested in meta.nested.iter() {
-                        if let NestedMeta::Meta(meta) = nested {
-                            parse_check_bytes_attributes(&mut result, meta)?;
-                        } else {
-                            return Err(Error::new_spanned(
-                                nested,
-                                "check_bytes parameters must be metas",
-                            ));
-                        }
-                    }
+                    meta.parse_nested_meta(|nested| {
+                        parse_check_bytes_attributes(&mut result, nested)
+                    })?;
                 } else if meta.path.is_ident("repr") {
-                    for n in meta.nested.iter() {
-                        if let NestedMeta::Meta(Meta::Path(path)) = n {
-                            if path.is_ident("transparent") {
-                                result.repr.transparent = Some(path.clone());
-                            } else if path.is_ident("packed") {
-                                result.repr.packed = Some(path.clone());
-                            } else if path.is_ident("C") {
-                                result.repr.c = Some(path.clone());
-                            } else if path.is_ident("align") {
-                                // Ignore alignment modifiers
-                            } else {
-                                let is_int_repr = path.is_ident("i8")
-                                    || path.is_ident("i16")
-                                    || path.is_ident("i32")
-                                    || path.is_ident("i64")
-                                    || path.is_ident("i128")
-                                    || path.is_ident("u8")
-                                    || path.is_ident("u16")
-                                    || path.is_ident("u32")
-                                    || path.is_ident("u64")
-                                    || path.is_ident("u128");
+                    meta.parse_nested_meta(|nested| {
+                        if nested.path.is_ident("transparent") {
+                            result.repr.transparent = Some(nested.path.clone());
+                        } else if nested.path.is_ident("packed") {
+                            result.repr.packed = Some(nested.path.clone());
+                        } else if nested.path.is_ident("C") {
+                            result.repr.c = Some(nested.path.clone());
+                        } else if nested.path.is_ident("align") {
+                            // Ignore alignment modifiers
+                        } else {
+                            let is_int_repr = nested.path.is_ident("i8")
+                                || nested.path.is_ident("i16")
+                                || nested.path.is_ident("i32")
+                                || nested.path.is_ident("i64")
+                                || nested.path.is_ident("i128")
+                                || nested.path.is_ident("u8")
+                                || nested.path.is_ident("u16")
+                                || nested.path.is_ident("u32")
+                                || nested.path.is_ident("u64")
+                                || nested.path.is_ident("u128");
 
-                                if is_int_repr {
-                                    result.repr.int = Some(path.clone());
-                                } else {
-                                    return Err(Error::new_spanned(
-                                        path,
-                                        "invalid repr, available reprs are transparent, C, i* and u*",
-                                    ));
-                                }
+                            if is_int_repr {
+                                result.repr.int = Some(nested.path.clone());
+                            } else {
+                                return Err(Error::new_spanned(
+                                    nested.path,
+                                    "invalid repr, available reprs are transparent, C, i* and u*",
+                                ));
                             }
                         }
-                    }
+                        Ok(())
+                    })?;
                 }
             }
         }
@@ -196,7 +180,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 for field in fields
                     .named
                     .iter()
-                    .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
+                    .filter(|f| !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds")))
                 {
                     let ty = &field.ty;
                     check_where
@@ -239,7 +223,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 for field in fields
                     .unnamed
                     .iter()
-                    .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
+                    .filter(|f| !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds")))
                 {
                     let ty = &field.ty;
                     check_where
@@ -318,7 +302,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         for field in fields
                             .named
                             .iter()
-                            .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
+                            .filter(|f| !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds")))
                         {
                             let ty = &field.ty;
                             check_where
@@ -330,7 +314,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         for field in fields
                             .unnamed
                             .iter()
-                            .filter(|f| !f.attrs.iter().any(|a| a.path.is_ident("omit_bounds")))
+                            .filter(|f| !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds")))
                         {
                             let ty = &field.ty;
                             check_where
