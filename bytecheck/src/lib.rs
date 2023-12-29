@@ -18,16 +18,24 @@
 //! verifying that some bytes represent a valid type. Implementing it can be
 //! done manually or automatically with the [derive macro](macro@CheckBytes).
 //!
+//! ## Note
+//!
+//! By default in-memory layout of a type may change between compiler versions or
+//! different compilations (see <https://doc.rust-lang.org/reference/type-layout.html>).
+//! In order to guarantee stable type layout between compilations `#[repr(C)]` attribute
+//! can be used.
+//!
 //! ## Examples
 //!
 //! ```
 //! use bytecheck::CheckBytes;
 //!
 //! #[derive(CheckBytes, Debug)]
+//! #[repr(C)] // Needed because we're checking against hardcoded byte arrays below.
 //! struct Test {
 //!     a: u32,
-//!     b: bool,
 //!     c: char,
+//!     b: bool,
 //! }
 //! #[repr(C, align(16))]
 //! struct Aligned<const N: usize>([u8; N]);
@@ -865,3 +873,8 @@ impl_nonzero!(NonZeroU16, u16);
 impl_nonzero!(NonZeroU32, u32);
 impl_nonzero!(NonZeroU64, u64);
 impl_nonzero!(NonZeroU128, u128);
+
+// Make sure code in readme is tested. This isn't included in the documentation.
+#[doc = include_str!("../../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
