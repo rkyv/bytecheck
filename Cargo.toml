@@ -4,6 +4,7 @@ members = [
     "bytecheck_derive",
     "bytecheck_test",
 ]
+resolver = "2"
 
 [workspace.package]
 version = "0.6.12"
@@ -14,4 +15,4 @@ documentation = "https://docs.rs/bytecheck"
 repository = "https://github.com/djkoloski/bytecheck"
 
 [workspace.dependencies]
-bytecheck_derive = "0.6.11"
+bytecheck_derive = { version = "0.6.12", path = "bytecheck_derive", default-features = false }

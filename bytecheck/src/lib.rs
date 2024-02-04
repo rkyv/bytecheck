@@ -24,10 +24,11 @@
 //! use bytecheck::CheckBytes;
 //!
 //! #[derive(CheckBytes, Debug)]
+//! #[repr(C)]
 //! struct Test {
 //!     a: u32,
-//!     b: bool,
-//!     c: char,
+//!     b: char,
+//!     c: bool,
 //! }
 //! #[repr(C, align(16))]
 //! struct Aligned<const N: usize>([u8; N]);
@@ -714,14 +715,16 @@ impl<T: fmt::Display> fmt::Display for EnumCheckError<T> {
                 inner,
             } => write!(
                 f,
-                "check failed for enum struct variant {}: {}", variant_name, inner
+                "check failed for enum struct variant {}: {}",
+                variant_name, inner
             ),
             EnumCheckError::InvalidTuple {
                 variant_name,
                 inner,
             } => write!(
                 f,
-                "check failed for enum tuple variant {}: {}", variant_name, inner
+                "check failed for enum tuple variant {}: {}",
+                variant_name, inner
             ),
             EnumCheckError::InvalidTag(tag) => write!(f, "invalid tag for enum: {}", tag),
         }
