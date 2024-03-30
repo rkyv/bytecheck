@@ -11,7 +11,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-bytecheck_derive = { workspace = true, path = "../bytecheck_derive", default-features = false }
+bytecheck_derive = { workspace = true, default-features = false }
 ptr_meta.workspace = true
 rancor.workspace = true
 simdutf8 = { workspace = true, optional = true }

@@ -142,7 +142,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
     // We add a context parameter __C for the CheckBytes type parameter.
     trait_generics.params.push(parse_quote! {
-        __C: #crate_path::rancor::Fallible + ?Sized
+        __C: #crate_path::rancor::Fallible + ?::core::marker::Sized
     });
     // We add context error bounds to the where clause for the trait impl.
     let trait_where_clause = trait_generics.make_where_clause();
@@ -246,7 +246,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         > {
                             #(#field_checks)*
                             #verify
-                            Ok(())
+                            ::core::result::Result::Ok(())
                         }
                     }
                 }
@@ -308,7 +308,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                         > {
                             #(#field_checks)*
                             #verify
-                            Ok(())
+                            ::core::result::Result::Ok(())
                         }
                     }
                 }
@@ -330,7 +330,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             <__C as #crate_path::rancor::Fallible>::Error,
                         > {
                             #verify
-                            Ok(())
+                            ::core::result::Result::Ok(())
                         }
                     }
                 }
@@ -491,7 +491,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             });
 
             let no_matching_tag_arm = quote! {
-                return Err(
+                return ::core::result::Result::Err(
                     <
                         <
                             __C as #crate_path::rancor::Fallible
@@ -546,7 +546,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                                 _ => #no_matching_tag_arm,
                             }
                             #verify
-                            Ok(())
+                            ::core::result::Result::Ok(())
                         }
                     }
                 };
