@@ -12,7 +12,7 @@
 mod tests {
     use bytecheck::{
         check_bytes, check_bytes_with_context,
-        rancor::{Error, Failure, Fallible, Infallible},
+        rancor::{Source, Failure, Fallible, Infallible},
         CheckBytes, Verify,
     };
     use rancor::Strategy;
@@ -37,7 +37,7 @@ mod tests {
     unsafe impl<C> CheckBytes<C> for CharLE
     where
         C: Fallible + ?Sized,
-        C::Error: Error,
+        C::Error: Source,
     {
         unsafe fn check_bytes(
             value: *const Self,

@@ -161,7 +161,7 @@ use core::{
     },
     ops, ptr,
 };
-use rancor::{fail, Error, Fallible, ResultExt as _, Strategy, Trace};
+use rancor::{fail, Source, Fallible, ResultExt as _, Strategy, Trace};
 #[cfg(feature = "simdutf8")]
 use simdutf8::basic::from_utf8;
 
@@ -351,7 +351,7 @@ impl std::error::Error for BoolCheckError {}
 unsafe impl<C> CheckBytes<C> for bool
 where
     C: Fallible + ?Sized,
-    C::Error: Error,
+    C::Error: Source,
 {
     #[inline]
     unsafe fn check_bytes(
@@ -376,7 +376,7 @@ where
 unsafe impl<C> CheckBytes<C> for AtomicBool
 where
     C: Fallible + ?Sized,
-    C::Error: Error,
+    C::Error: Source,
 {
     #[inline]
     unsafe fn check_bytes(
@@ -395,7 +395,7 @@ where
 unsafe impl<C> CheckBytes<C> for char
 where
     C: Fallible + ?Sized,
-    C::Error: Error,
+    C::Error: Source,
 {
     #[inline]
     unsafe fn check_bytes(ptr: *const Self, _: &mut C) -> Result<(), C::Error> {
@@ -557,7 +557,7 @@ where
 unsafe impl<C> CheckBytes<C> for str
 where
     C: Fallible + ?Sized,
-    C::Error: Error,
+    C::Error: Source,
 {
     #[inline]
     unsafe fn check_bytes(
@@ -581,7 +581,7 @@ where
 unsafe impl<C> CheckBytes<C> for std::ffi::CStr
 where
     C: Fallible + ?Sized,
-    C::Error: Error,
+    C::Error: Source,
 {
     #[inline]
     unsafe fn check_bytes(
@@ -862,7 +862,7 @@ macro_rules! impl_nonzero {
         unsafe impl<C> CheckBytes<C> for $nonzero
         where
             C: Fallible + ?Sized,
-            C::Error: Error,
+            C::Error: Source,
         {
             #[inline]
             unsafe fn check_bytes(

@@ -155,12 +155,12 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             >::Error: #crate_path::rancor::Trace
         },
         // Enums may error while checking the discriminant, so the error type of
-        // the context needs to implement `Error` so we can create a new error
+        // the context needs to implement `Source` so we can create a new error
         // from an `InvalidEnumDiscriminantError`.
         Data::Enum(_) => parse_quote! {
             <
                 __C as #crate_path::rancor::Fallible
-            >::Error: #crate_path::rancor::Error
+            >::Error: #crate_path::rancor::Source
         },
     });
     // If the user specified any aditional bounds, we add them to the where
@@ -495,7 +495,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                     <
                         <
                             __C as #crate_path::rancor::Fallible
-                        >::Error as #crate_path::rancor::Error
+                        >::Error as #crate_path::rancor::Source
                     >::new(
                         #crate_path::InvalidEnumDiscriminantError {
                             enum_name: ::core::stringify!(#name),
