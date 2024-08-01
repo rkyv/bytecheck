@@ -12,7 +12,7 @@
 mod tests {
     use bytecheck::{
         check_bytes, check_bytes_with_context,
-        rancor::{Source, Failure, Fallible, Infallible},
+        rancor::{Failure, Fallible, Infallible, Source},
         CheckBytes, Verify,
     };
     use rancor::Strategy;
@@ -342,16 +342,12 @@ mod tests {
 
     #[test]
     fn test_enum() {
+        #[allow(dead_code)]
         #[derive(CheckBytes, Debug)]
         #[repr(u8)]
         enum Test {
             A(u32, bool, CharLE),
-            #[allow(dead_code)]
-            B {
-                a: u32,
-                b: bool,
-                c: CharLE,
-            },
+            B { a: u32, b: bool, c: CharLE },
             C,
         }
 
@@ -514,6 +510,7 @@ mod tests {
             }
         }
 
+        #[allow(dead_code)]
         #[derive(CheckBytes)]
         #[repr(u8)]
         enum Node {

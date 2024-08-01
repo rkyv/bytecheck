@@ -152,6 +152,7 @@ use core::sync::atomic::{AtomicI32, AtomicU32};
 #[cfg(target_has_atomic = "64")]
 use core::sync::atomic::{AtomicI64, AtomicU64};
 use core::{
+    cell::{Cell, UnsafeCell},
     fmt,
     marker::{PhantomData, PhantomPinned},
     mem::ManuallyDrop,
@@ -161,7 +162,7 @@ use core::{
     },
     ops, ptr,
 };
-use rancor::{fail, Source, Fallible, ResultExt as _, Strategy, Trace};
+use rancor::{fail, Fallible, ResultExt as _, Source, Strategy, Trace};
 #[cfg(feature = "simdutf8")]
 use simdutf8::basic::from_utf8;
 
@@ -324,6 +325,69 @@ where
         unsafe {
             T::check_bytes(inner_ptr, c)
                 .trace("while checking inner value of `ManuallyDrop`")
+        }
+    }
+}
+
+// SAFETY: `UnsafeCell<T>` has the same memory layout as `T`, and so `value`
+// points to a valid `UnsafeCell<T>` if it also points to a valid `T`.
+unsafe impl<T, C> CheckBytes<C> for UnsafeCell<T>
+where
+    T: CheckBytes<C> + ?Sized,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
+{
+    #[inline]
+    unsafe fn check_bytes(
+        value: *const Self,
+        c: &mut C,
+    ) -> Result<(), C::Error> {
+        let inner_ptr =
+            // SAFETY: Because `UnsafeCell<T>` has the same memory layout as
+            // `T`, a pointer to an `UnsafeCell<T>` is guaranteed to be the same
+            // as a pointer to `T`. We can't call `.cast()` here because `T` may
+            // be an unsized type.
+            unsafe { core::mem::transmute::<*const Self, *const T>(value) };
+        // SAFETY: The caller has guaranteed that `value` is aligned for
+        // `UnsafeCell<T>` and points to enough bytes to represent
+        // `UnsafeCell<T>`. Since `UnsafeCell<T>` has the same layout `T`,
+        // `inner_ptr` is also aligned for `T` and points to enough bytes to
+        // represent it.
+        unsafe {
+            T::check_bytes(inner_ptr, c)
+                .trace("while checking inner value of `UnsafeCell`")
+        }
+    }
+}
+
+// SAFETY: `Cell<T>` has the same memory layout as `UnsafeCell<T>` (and
+// therefore `T` itself), and so `value` points to a valid `UnsafeCell<T>` if it
+// also points to a valid `T`.
+unsafe impl<T, C> CheckBytes<C> for Cell<T>
+where
+    T: CheckBytes<C> + ?Sized,
+    C: Fallible + ?Sized,
+    C::Error: Trace,
+{
+    #[inline]
+    unsafe fn check_bytes(
+        value: *const Self,
+        c: &mut C,
+    ) -> Result<(), C::Error> {
+        let inner_ptr =
+            // SAFETY: Because `Cell<T>` has the same memory layout as
+            // `UnsafeCell<T>` (and therefore `T` itself), a pointer to a
+            // `Cell<T>` is guaranteed to be the same as a pointer to `T`. We
+            // can't call `.cast()` here because `T` may be an unsized type.
+            unsafe { core::mem::transmute::<*const Self, *const T>(value) };
+        // SAFETY: The caller has guaranteed that `value` is aligned for
+        // `Cell<T>` and points to enough bytes to represent `Cell<T>`. Since
+        // `Cell<T>` has the same layout as `UnsafeCell<T>` ( and therefore `T`
+        // itself), `inner_ptr` is also aligned for `T` and points to enough
+        // bytes to represent it.
+        unsafe {
+            T::check_bytes(inner_ptr, c)
+                .trace("while checking inner value of `Cell`")
         }
     }
 }
