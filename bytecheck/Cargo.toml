@@ -16,15 +16,16 @@ ptr_meta.workspace = true
 rancor.workspace = true
 simdutf8 = { workspace = true, optional = true }
 
-# Support for various common crates. These are primarily to get users off the ground and build some
-# momentum.
+# Support for various common crates. These are primarily to get users off the
+# ground and build some momentum.
 
-# These are NOT PLANNED to remain in bytecheck for the final release. Much like serde, these
-# implementations should be moved into their respective crates over time. Before adding support for
-# another crate, please consider getting bytecheck support in the crate instead.
+# These are NOT PLANNED to remain in bytecheck for the 1.0 release. Much like
+# serde, these implementations should be moved into their respective crates over
+# time. Before adding support for another crate, please consider getting
+# bytecheck support in the crate instead.
 
 uuid = { workspace = true, optional = true }
 
 [features]
 default = ["simdutf8", "std"]
-std = ["ptr_meta/std", "rancor/std", "simdutf8?/std"]
+std = ["ptr_meta/std", "rancor/std", "simdutf8?/std", "uuid?/std"]
