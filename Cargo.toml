@@ -15,7 +15,7 @@ documentation = "https://docs.rs/bytecheck"
 repository = "https://github.com/rkyv/bytecheck"
 
 [workspace.dependencies]
-bytecheck = { version = "0.8.0-alpha.9", path = "bytecheck", default-feature = false }
+bytecheck = { version = "0.8.0-alpha.9", path = "bytecheck", default-features = false }
 bytecheck_derive = { version = "0.8.0-alpha.9", path = "bytecheck_derive", default-features = false }
 proc-macro2 = { version = "1.0", default-features = false }
 ptr_meta = { version = "0.3.0-alpha.2", default-features = false }

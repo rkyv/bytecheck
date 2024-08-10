@@ -18,12 +18,16 @@
 //! verifying that some bytes represent a valid type. Implementing it can be
 //! done manually or automatically with the [derive macro](macro@CheckBytes).
 //!
-//! ## Note
+//! ## Layout stability
 //!
-//! By default in-memory layout of a type may change between compiler versions or
-//! different compilations (see <https://doc.rust-lang.org/reference/type-layout.html>).
-//! In order to guarantee stable type layout between compilations `#[repr(C)]` attribute
-//! can be used.
+//! The layouts of types may change between compiler versions, or even different
+//! compilations. To guarantee stable type layout between compilations, structs,
+//! enums, and unions can be annotated with `#[repr(C)]`, and enums specifically
+//! can be annotated with `#[repr(int)]` or `#[repr(C, int)]` as well.
+//!
+//! See [the reference's page on type layout][reference] for more details.
+//!
+//! [reference]: https://doc.rust-lang.org/reference/type-layout.html
 //!
 //! ## Examples
 //!
