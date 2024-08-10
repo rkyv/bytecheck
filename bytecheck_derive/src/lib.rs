@@ -13,14 +13,13 @@ mod repr;
 
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
+use repr::Repr;
 use syn::{
     meta::ParseNestedMeta, parenthesized, parse::Parse, parse_macro_input,
     parse_quote, punctuated::Punctuated, spanned::Spanned, AttrStyle, Data,
     DeriveInput, Error, Field, Fields, Ident, Index, LitStr, Path, Token,
     WherePredicate,
 };
-
-use repr::Repr;
 
 use crate::repr::BaseRepr;
 
@@ -338,10 +337,13 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
         },
         Data::Enum(ref data) => {
             let repr = match attributes.repr.base_repr {
-                None => return Err(Error::new_spanned(
-                    name,
-                    "enums implementing CheckBytes must have an explicit repr",
-                )),
+                None => {
+                    return Err(Error::new_spanned(
+                        name,
+                        "enums implementing CheckBytes must have an explicit \
+                         repr",
+                    ))
+                }
                 Some((BaseRepr::Transparent, _)) => {
                     return Err(Error::new_spanned(
                         name,

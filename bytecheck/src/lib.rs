@@ -28,7 +28,7 @@
 //! ## Examples
 //!
 //! ```
-//! use bytecheck::{CheckBytes, check_bytes, rancor::Failure};
+//! use bytecheck::{check_bytes, rancor::Failure, CheckBytes};
 //!
 //! #[derive(CheckBytes, Debug)]
 //! #[repr(C)]
@@ -56,52 +56,58 @@
 //!     // These are valid bytes for a `Test`
 //!     check_bytes::<Test, Failure>(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8,
-//!             0x78u8, 0u8, 0u8, 0u8,
-//!             1u8, 255u8, 255u8, 255u8,
-//!         ].cast()
-//!     ).unwrap();
+//!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8, 255u8,
+//!             255u8,
+//!         ]
+//!         .cast(),
+//!     )
+//!     .unwrap();
 //!
 //!     // Changing the bytes for the u32 is OK, any bytes are a valid u32
 //!     check_bytes::<Test, Failure>(
 //!         bytes![
-//!             42u8, 16u8, 20u8, 3u8,
-//!             0x78u8, 0u8, 0u8, 0u8,
-//!             1u8, 255u8, 255u8, 255u8,
-//!         ].cast()
-//!     ).unwrap();
+//!             42u8, 16u8, 20u8, 3u8, 0x78u8, 0u8, 0u8, 0u8, 1u8, 255u8,
+//!             255u8, 255u8,
+//!         ]
+//!         .cast(),
+//!     )
+//!     .unwrap();
 //!
 //!     // Characters outside the valid ranges are invalid
 //!     check_bytes::<Test, Failure>(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8,
-//!             0x00u8, 0xd8u8, 0u8, 0u8,
-//!             1u8, 255u8, 255u8, 255u8,
-//!         ].cast()
-//!     ).unwrap_err();
+//!             0u8, 0u8, 0u8, 0u8, 0x00u8, 0xd8u8, 0u8, 0u8, 1u8, 255u8,
+//!             255u8, 255u8,
+//!         ]
+//!         .cast(),
+//!     )
+//!     .unwrap_err();
 //!     check_bytes::<Test, Failure>(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8,
-//!             0x00u8, 0x00u8, 0x11u8, 0u8,
-//!             1u8, 255u8, 255u8, 255u8,
-//!         ].cast()
-//!     ).unwrap_err();
+//!             0u8, 0u8, 0u8, 0u8, 0x00u8, 0x00u8, 0x11u8, 0u8, 1u8, 255u8,
+//!             255u8, 255u8,
+//!         ]
+//!         .cast(),
+//!     )
+//!     .unwrap_err();
 //!
 //!     // 0 is a valid boolean value (false) but 2 is not
 //!     check_bytes::<Test, Failure>(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8,
-//!             0x78u8, 0u8, 0u8, 0u8,
-//!             0u8, 255u8, 255u8, 255u8,
-//!         ].cast()
-//!     ).unwrap();
+//!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 0u8, 255u8, 255u8,
+//!             255u8,
+//!         ]
+//!         .cast(),
+//!     )
+//!     .unwrap();
 //!     check_bytes::<Test, Failure>(
 //!         bytes![
-//!             0u8, 0u8, 0u8, 0u8,
-//!             0x78u8, 0u8, 0u8, 0u8,
-//!             2u8, 255u8, 255u8, 255u8,
-//!         ].cast()
-//!     ).unwrap_err();
+//!             0u8, 0u8, 0u8, 0u8, 0x78u8, 0u8, 0u8, 0u8, 2u8, 255u8, 255u8,
+//!             255u8,
+//!         ]
+//!         .cast(),
+//!     )
+//!     .unwrap_err();
 //! }
 //! ```
 //!
@@ -169,12 +175,12 @@ use core::{
     },
     ops, ptr,
 };
-use rancor::{fail, Fallible, ResultExt as _, Source, Strategy, Trace};
-#[cfg(feature = "simdutf8")]
-use simdutf8::basic::from_utf8;
 
 pub use bytecheck_derive::CheckBytes;
 pub use rancor;
+use rancor::{fail, Fallible, ResultExt as _, Source, Strategy, Trace};
+#[cfg(feature = "simdutf8")]
+use simdutf8::basic::from_utf8;
 
 /// A type that can check whether a pointer points to a valid value.
 ///
@@ -318,11 +324,11 @@ where
         value: *const Self,
         c: &mut C,
     ) -> Result<(), C::Error> {
+        // SAFETY: Because `ManuallyDrop<T>` is `#[repr(transparent)]`, a
+        // pointer to a `ManuallyDrop<T>` is guaranteed to be the same as a
+        // pointer to `T`. We can't call `.cast()` here because `T` may be
+        // an unsized type.
         let inner_ptr =
-            // SAFETY: Because `ManuallyDrop<T>` is `#[repr(transparent)]`, a
-            // pointer to a `ManuallyDrop<T>` is guaranteed to be the same as a
-            // pointer to `T`. We can't call `.cast()` here because `T` may be
-            // an unsized type.
             unsafe { core::mem::transmute::<*const Self, *const T>(value) };
         // SAFETY: The caller has guaranteed that `value` is aligned for
         // `ManuallyDrop<T>` and points to enough bytes to represent
@@ -349,11 +355,11 @@ where
         value: *const Self,
         c: &mut C,
     ) -> Result<(), C::Error> {
+        // SAFETY: Because `UnsafeCell<T>` has the same memory layout as
+        // `T`, a pointer to an `UnsafeCell<T>` is guaranteed to be the same
+        // as a pointer to `T`. We can't call `.cast()` here because `T` may
+        // be an unsized type.
         let inner_ptr =
-            // SAFETY: Because `UnsafeCell<T>` has the same memory layout as
-            // `T`, a pointer to an `UnsafeCell<T>` is guaranteed to be the same
-            // as a pointer to `T`. We can't call `.cast()` here because `T` may
-            // be an unsized type.
             unsafe { core::mem::transmute::<*const Self, *const T>(value) };
         // SAFETY: The caller has guaranteed that `value` is aligned for
         // `UnsafeCell<T>` and points to enough bytes to represent
@@ -381,11 +387,11 @@ where
         value: *const Self,
         c: &mut C,
     ) -> Result<(), C::Error> {
+        // SAFETY: Because `Cell<T>` has the same memory layout as
+        // `UnsafeCell<T>` (and therefore `T` itself), a pointer to a
+        // `Cell<T>` is guaranteed to be the same as a pointer to `T`. We
+        // can't call `.cast()` here because `T` may be an unsized type.
         let inner_ptr =
-            // SAFETY: Because `Cell<T>` has the same memory layout as
-            // `UnsafeCell<T>` (and therefore `T` itself), a pointer to a
-            // `Cell<T>` is guaranteed to be the same as a pointer to `T`. We
-            // can't call `.cast()` here because `T` may be an unsized type.
             unsafe { core::mem::transmute::<*const Self, *const T>(value) };
         // SAFETY: The caller has guaranteed that `value` is aligned for
         // `Cell<T>` and points to enough bytes to represent `Cell<T>`. Since
