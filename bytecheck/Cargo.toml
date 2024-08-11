@@ -1,17 +1,18 @@
 [package]
 name = "bytecheck"
-description = "Derive macro for bytecheck"
-documentation = "https://docs.rs/bytecheck"
-keywords = ["bytecheck", "validation", "zero-copy", "rkyv"]
-categories = ["encoding"]
+description = "Memory validation framework for Rust"
 version.workspace = true
-edition.workspace = true
 authors.workspace = true
+edition.workspace = true
 license.workspace = true
+readme.workspace = true
 repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/bytecheck"
 
 [dependencies]
-bytecheck_derive = { workspace = true, default-features = false }
+bytecheck_derive.workspace = true
 ptr_meta.workspace = true
 rancor.workspace = true
 simdutf8 = { workspace = true, optional = true }
@@ -27,5 +28,6 @@ simdutf8 = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 
 [features]
-default = ["simdutf8", "std"]
+default = ["derive", "simdutf8", "std"]
+derive = []
 std = ["ptr_meta/std", "rancor/std", "simdutf8?/std", "uuid?/std"]

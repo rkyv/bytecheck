@@ -1,13 +1,23 @@
-# bytecheck &emsp; [![Latest Version]][crates.io] [![License]][license path]
+# `bytecheck`
 
-[Latest Version]: https://img.shields.io/crates/v/bytecheck.svg
+[![crates.io badge]][crates.io] [![docs badge]][docs] [![license badge]][license]
+
+[crates.io badge]: https://img.shields.io/crates/v/bytecheck.svg
 [crates.io]: https://crates.io/crates/bytecheck
-[License]: https://img.shields.io/badge/license-MIT-blue.svg
-[license path]: https://github.com/djkoloski/bytecheck/blob/master/LICENSE
+[docs badge]: https://img.shields.io/docsrs/bytecheck
+[docs]: https://docs.rs/bytecheck
+[license badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[license]: https://github.com/rkyv/bytecheck/blob/master/LICENSE
 
-bytecheck is a type validation framework for Rust.
+bytecheck is a memory validation framework for Rust.
 
-## bytecheck in action
+## Documentation
+
+- [bytecheck](https://docs.rs/bytecheck), a memory validation framework for Rust
+- [bytecheck_derive](https://docs.rs/bytecheck_derive), the derive macro for
+  bytecheck
+
+## Example
 
 ```rust
 use bytecheck::{CheckBytes, check_bytes, rancor::Failure};

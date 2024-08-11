@@ -9,100 +9,19 @@
     clippy::all
 )]
 
+mod attributes;
 mod repr;
 
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
-use repr::Repr;
+use quote::quote;
 use syn::{
-    meta::ParseNestedMeta, parenthesized, parse::Parse, parse_macro_input,
-    parse_quote, punctuated::Punctuated, spanned::Spanned, AttrStyle, Data,
-    DeriveInput, Error, Field, Fields, Ident, Index, LitStr, Path, Token,
-    WherePredicate,
+    parse_macro_input, parse_quote, spanned::Spanned, Data, DeriveInput, Error,
+    Field, Fields, Ident, Index, Path,
 };
 
-use crate::repr::BaseRepr;
-
-#[derive(Default)]
-struct Attributes {
-    pub repr: Repr,
-    pub bounds: Option<Punctuated<WherePredicate, Token![,]>>,
-    pub crate_path: Option<Path>,
-    pub verify: Option<Path>,
-}
-
-fn try_set_attribute<T: ToTokens>(
-    attribute: &mut Option<T>,
-    value: T,
-    name: &'static str,
-) -> Result<(), Error> {
-    if attribute.is_none() {
-        *attribute = Some(value);
-        Ok(())
-    } else {
-        Err(Error::new_spanned(
-            value,
-            format!("{name} already specified"),
-        ))
-    }
-}
-
-fn parse_check_bytes_attributes(
-    attributes: &mut Attributes,
-    meta: ParseNestedMeta<'_>,
-) -> Result<(), Error> {
-    if meta.path.is_ident("bounds") {
-        let bounds;
-        parenthesized!(bounds in meta.input);
-        let bounds =
-            bounds.parse_terminated(WherePredicate::parse, Token![,])?;
-        try_set_attribute(&mut attributes.bounds, bounds, "bounds")
-    } else if meta.path.is_ident("crate") {
-        let crate_path = meta.value()?.parse::<LitStr>()?.parse()?;
-        try_set_attribute(&mut attributes.crate_path, crate_path, "crate")
-    } else if meta.path.is_ident("verify") {
-        if !meta.input.is_empty() && !meta.input.peek(Token![,]) {
-            return Err(meta.error("verify argument must be a path"));
-        }
-
-        try_set_attribute(&mut attributes.verify, meta.path, "verify")
-    } else {
-        Err(meta.error("unrecognized check_bytes argument"))
-    }
-}
-
-fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
-    let mut result = Attributes::default();
-
-    for attr in input.attrs.iter() {
-        if !matches!(attr.style, AttrStyle::Outer) {
-            continue;
-        }
-
-        if attr.path().is_ident("check_bytes") {
-            attr.parse_nested_meta(|nested| {
-                parse_check_bytes_attributes(&mut result, nested)
-            })?;
-        } else if attr.path().is_ident("repr") {
-            attr.parse_nested_meta(|nested| {
-                result.repr.parse_list_meta(nested)
-            })?;
-        }
-    }
-
-    Ok(result)
-}
+use crate::{attributes::Attributes, repr::BaseRepr};
 
 /// Derives `CheckBytes` for the labeled type.
-///
-/// Additional arguments can be specified using the `#[check_bytes(...)]`
-/// attribute:
-///
-/// - `bounds(...)`: Adds additional bounds to the `CheckBytes` implementation.
-///   This can be especially useful when dealing with recursive structures,
-///   where bounds may need to be omitted to prevent recursive type definitions.
-///   In the context of the added bounds, `__C` is the name of the context
-///   generic (e.g. `__C: MyContext`).
 ///
 /// This derive macro automatically adds a type bound `field: CheckBytes<__C>`
 /// for each field type. This can cause an overflow while evaluating trait
@@ -112,6 +31,19 @@ fn parse_attributes(input: &DeriveInput) -> Result<Attributes, Error> {
 /// will suppress this trait bound and allow recursive structures. This may be
 /// too coarse for some types, in which case additional type bounds may be
 /// required with `bounds(...)`.
+///
+/// # Attributes
+///
+/// Additional arguments can be specified using attributes.
+///
+/// `#[check_bytes(...)]` accepts the following attributes:
+///
+/// - `bounds(...)`: Adds additional bounds to the `CheckBytes` implementation.
+///   This can be especially useful when dealing with recursive structures,
+///   where bounds may need to be omitted to prevent recursive type definitions.
+///   In the context of the added bounds, `__C` is the name of the context
+///   generic (e.g. `__C: MyContext`).
+/// - `crate = ...`: Chooses an alternative crate path to import bytecheck from.
 #[proc_macro_derive(CheckBytes, attributes(check_bytes, omit_bounds))]
 pub fn check_bytes_derive(
     input: proc_macro::TokenStream,
@@ -123,9 +55,9 @@ pub fn check_bytes_derive(
 }
 
 fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
-    let attributes = parse_attributes(&input)?;
+    let attributes = Attributes::parse(&input)?;
 
-    let crate_path = attributes.crate_path.unwrap_or(parse_quote!(::bytecheck));
+    let crate_path = attributes.crate_path();
 
     let name = &input.ident;
 

@@ -1,5 +1,3 @@
-//! [`CheckBytes`] implementations for uuid.
-
 use uuid::Uuid;
 
 use crate::{rancor::Fallible, CheckBytes};
@@ -14,7 +12,7 @@ unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for Uuid {
 }
 
 #[cfg(test)]
-mod bytecheck_tests {
+mod tests {
     use uuid::Uuid;
 
     use crate::{check_bytes, rancor::Infallible};

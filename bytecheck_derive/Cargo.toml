@@ -1,12 +1,15 @@
 [package]
 name = "bytecheck_derive"
 description = "Derive macro for bytecheck"
-documentation = "https://docs.rs/bytecheck_derive"
 version.workspace = true
-edition.workspace = true
 authors.workspace = true
+edition.workspace = true
 license.workspace = true
+readme.workspace = true
 repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/bytecheck_derive"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,5 +18,5 @@ proc-macro = true
 
 [dependencies]
 proc-macro2.workspace = true
-syn.workspace = true
+syn = { workspace = true, features = ["clone-impls", "derive", "full", "parsing", "printing", "proc-macro"] }
 quote.workspace = true
