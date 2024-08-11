@@ -6,7 +6,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.8.0-alpha.9"
+version = "0.8.0-alpha.10"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -16,11 +16,11 @@ keywords = ["no_std", "validation", "serialization"]
 categories = ["encoding", "no-std", "no-std::no-alloc"]
 
 [workspace.dependencies]
-bytecheck = { version = "=0.8.0-alpha.9", path = "bytecheck", default-features = false }
-bytecheck_derive = { version = "=0.8.0-alpha.9", path = "bytecheck_derive", default-features = false }
+bytecheck = { version = "=0.8.0-alpha.10", path = "bytecheck", default-features = false }
+bytecheck_derive = { version = "=0.8.0-alpha.10", path = "bytecheck_derive", default-features = false }
 proc-macro2 = { version = "1", default-features = false }
 ptr_meta = { version = "=0.3.0-alpha.3", default-features = false }
-rancor = { version = "=0.1.0-alpha.9", default-features = false }
+rancor = { version = "=0.1.0-alpha.10", default-features = false }
 simdutf8 = { version = "0.1", default-features = false }
 syn = { version = "2", default-features = false }
 uuid = { version = "1", default-features = false }
