@@ -15,17 +15,11 @@ env:
 
 jobs:
   features:
-    name: Features / ${{ matrix.std }} ${{ matrix.derive }} ${{ matrix.external }}
+    name: Features / ${{ matrix.external }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        std:
-          - ''
-          - std
-        derive:
-          - ''
-          - derive
         external:
           - ''
           - simdutf8 uuid
@@ -33,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --verbose --tests --no-default-features --features "${{ matrix.std }} ${{ matrix.derive }} ${{ matrix.external }}"
+      - run: cargo test --verbose --tests --no-default-features --features "${{ matrix.external }}"
 
   toolchain:
     name: Toolchain / ${{ matrix.toolchain }} ${{ matrix.opt }}

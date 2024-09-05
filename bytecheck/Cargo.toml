@@ -28,6 +28,4 @@ simdutf8 = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 
 [features]
-default = ["derive", "simdutf8", "std"]
-derive = []
-std = ["ptr_meta/std", "rancor/std", "simdutf8?/std", "uuid?/std"]
+default = ["simdutf8"]

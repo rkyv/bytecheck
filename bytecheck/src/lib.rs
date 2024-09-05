@@ -32,7 +32,6 @@
 //!
 //! - `derive`: Re-exports the macros from `bytecheck_derive`. Enabled by
 //!   default.
-//! - `std`: Enables standard library support. Enabled by default.
 //! - `simdutf8`: Uses the `simdutf8` crate to validate UTF-8 strings. Enabled
 //!   by default.
 //!
@@ -58,7 +57,7 @@
     rustdoc::broken_intra_doc_links,
     rustdoc::missing_crate_level_docs
 )]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 #![cfg_attr(all(docsrs, not(doctest)), feature(doc_cfg, doc_auto_cfg))]
 
 // Support for various common crates. These are primarily to get users off the
@@ -84,6 +83,7 @@ use core::sync::atomic::{AtomicI32, AtomicU32};
 use core::sync::atomic::{AtomicI64, AtomicU64};
 use core::{
     cell::{Cell, UnsafeCell},
+    error::Error,
     ffi::CStr,
     fmt,
     marker::{PhantomData, PhantomPinned},
@@ -95,7 +95,6 @@ use core::{
     ops, ptr,
 };
 
-#[cfg(feature = "derive")]
 pub use bytecheck_derive::CheckBytes;
 pub use rancor;
 use rancor::{fail, Fallible, ResultExt as _, Source, Strategy, Trace};
@@ -340,8 +339,7 @@ impl fmt::Display for BoolCheckError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for BoolCheckError {}
+impl Error for BoolCheckError {}
 
 // SAFETY: A bool is a one byte value that must either be 0 or 1. `check_bytes`
 // only returns `Ok` if `value` is 0 or 1.
@@ -561,13 +559,24 @@ where
         value: *const Self,
         _: &mut C,
     ) -> Result<(), C::Error> {
+        #[derive(Debug)]
+        struct Utf8Error;
+
+        impl fmt::Display for Utf8Error {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "invalid UTF-8")
+            }
+        }
+
+        impl Error for Utf8Error {}
+
         let slice_ptr = value as *const [u8];
         // SAFETY: The caller has guaranteed that `value` is properly-aligned
         // and points to enough bytes for its `str`. Because a `u8` slice has
         // the same layout as a `str`, we can dereference it for UTF-8
         // validation.
         let slice = unsafe { &*slice_ptr };
-        from_utf8(slice).into_error()?;
+        from_utf8(slice).map_err(|_| Utf8Error).into_error()?;
         Ok(())
     }
 }
@@ -653,8 +662,7 @@ impl<T: fmt::Display> fmt::Display for InvalidEnumDiscriminantError<T> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<T> std::error::Error for InvalidEnumDiscriminantError<T> where
+impl<T> Error for InvalidEnumDiscriminantError<T> where
     T: fmt::Debug + fmt::Display
 {
 }
@@ -848,8 +856,7 @@ impl fmt::Display for NonZeroCheckError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for NonZeroCheckError {}
+impl Error for NonZeroCheckError {}
 
 macro_rules! impl_nonzero {
     ($nonzero:ident, $underlying:ident) => {
@@ -893,9 +900,11 @@ impl_nonzero!(NonZeroU128, u128);
 #[cfg(test)]
 #[macro_use]
 mod tests {
-    use rancor::{Failure, Fallible, Infallible, Source};
+    use core::ffi::CStr;
 
-    use crate::{check_bytes, CheckBytes};
+    use rancor::{Failure, Fallible, Infallible, Source, Strategy};
+
+    use crate::{check_bytes, check_bytes_with_context, CheckBytes, Verify};
 
     #[derive(Debug)]
     #[repr(transparent)]
@@ -1052,10 +1061,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
     fn test_c_str() {
-        use ::std::ffi::CStr;
-
         macro_rules! test_cases {
             ($($bytes:expr, $pat:pat,)*) => {
                 $(
@@ -1082,16 +1088,6 @@ mod tests {
             }
         }
     }
-}
-
-#[cfg(all(test, feature = "derive"))]
-mod derive_tests {
-    use rancor::{Failure, Fallible, Infallible, Strategy};
-
-    use crate::{
-        check_bytes, check_bytes_with_context, tests::CharLE, CheckBytes,
-        Verify,
-    };
 
     #[test]
     fn test_unit_struct() {
