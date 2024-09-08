@@ -5,8 +5,6 @@ use syn::{
     WherePredicate,
 };
 
-use crate::repr::Repr;
-
 fn try_set_attribute<T: ToTokens>(
     attribute: &mut Option<T>,
     value: T,
@@ -25,7 +23,6 @@ fn try_set_attribute<T: ToTokens>(
 
 #[derive(Default)]
 pub struct Attributes {
-    pub repr: Repr,
     pub bounds: Option<Punctuated<WherePredicate, Token![,]>>,
     crate_path: Option<Path>,
     pub verify: Option<Path>,
@@ -77,10 +74,6 @@ impl Attributes {
             if attr.path().is_ident("bytecheck") {
                 attr.parse_nested_meta(|nested| {
                     result.parse_check_bytes_attributes(nested)
-                })?;
-            } else if attr.path().is_ident("repr") {
-                attr.parse_nested_meta(|nested| {
-                    result.repr.parse_list_meta(nested)
                 })?;
             }
         }

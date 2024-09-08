@@ -22,7 +22,7 @@ use syn::{
 
 use crate::{
     attributes::{Attributes, FieldAttributes},
-    repr::BaseRepr,
+    repr::Repr,
     util::iter_fields,
 };
 
@@ -273,27 +273,28 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
             }
         },
         Data::Enum(ref data) => {
-            let repr = match attributes.repr.base_repr {
-                None => {
+            let repr = Repr::from_attrs(&input.attrs)?;
+            let primitive = match repr {
+                Repr::Transparent => {
+                    return Err(Error::new_spanned(
+                        name,
+                        "enums cannot be repr(transparent)",
+                    ))
+                }
+                Repr::Primitive(i) => i,
+                Repr::C { .. } => {
+                    return Err(Error::new_spanned(
+                        name,
+                        "repr(C) enums are not currently supported",
+                    ))
+                }
+                Repr::Rust { .. } => {
                     return Err(Error::new_spanned(
                         name,
                         "enums implementing CheckBytes must have an explicit \
                          repr",
                     ))
                 }
-                Some((BaseRepr::Transparent, _)) => {
-                    return Err(Error::new_spanned(
-                        name,
-                        "enums cannot be repr(transparent)",
-                    ))
-                }
-                Some((BaseRepr::C, _)) => {
-                    return Err(Error::new_spanned(
-                        name,
-                        "repr(C) enums are not currently supported",
-                    ))
-                }
-                Some((BaseRepr::Int(i), _)) => i,
             };
 
             let tag_variant_defs = data.variants.iter().map(|v| {
@@ -309,7 +310,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 let variant = &v.ident;
                 quote! {
                     #[allow(non_upper_case_globals)]
-                    const #variant: #repr = Tag::#variant as #repr;
+                    const #variant: #primitive = Tag::#variant as #primitive;
                 }
             });
 
@@ -415,7 +416,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
 
             quote! {
                 const _: () = {
-                    #[repr(#repr)]
+                    #[repr(#primitive)]
                     enum Tag {
                         #(#tag_variant_defs,)*
                     }
@@ -448,7 +449,7 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                             (),
                             <__C as #crate_path::rancor::Fallible>::Error,
                         > {
-                            let tag = *value.cast::<#repr>();
+                            let tag = *value.cast::<#primitive>();
                             match tag {
                                 #(#tag_variant_values => #check_arms)*
                                 _ => #no_matching_tag_arm,
