@@ -1092,7 +1092,7 @@ mod tests {
     #[test]
     fn test_unit_struct() {
         #[derive(CheckBytes)]
-        #[check_bytes(crate)]
+        #[bytecheck(crate)]
         struct Test;
 
         unsafe {
@@ -1103,7 +1103,7 @@ mod tests {
     #[test]
     fn test_tuple_struct() {
         #[derive(CheckBytes, Debug)]
-        #[check_bytes(crate)]
+        #[bytecheck(crate)]
         struct Test(u32, bool, CharLE);
 
         let value = Test(42, true, 'x'.into());
@@ -1168,7 +1168,7 @@ mod tests {
     #[test]
     fn test_struct() {
         #[derive(CheckBytes, Debug)]
-        #[check_bytes(crate)]
+        #[bytecheck(crate)]
         struct Test {
             a: u32,
             b: bool,
@@ -1241,7 +1241,7 @@ mod tests {
     #[test]
     fn test_generic_struct() {
         #[derive(CheckBytes, Debug)]
-        #[check_bytes(crate)]
+        #[bytecheck(crate)]
         struct Test<T> {
             a: u32,
             b: T,
@@ -1277,7 +1277,7 @@ mod tests {
     fn test_enum() {
         #[allow(dead_code)]
         #[derive(CheckBytes, Debug)]
-        #[check_bytes(crate)]
+        #[bytecheck(crate)]
         #[repr(u8)]
         enum Test {
             A(u32, bool, CharLE),
@@ -1346,7 +1346,7 @@ mod tests {
     #[test]
     fn test_explicit_enum_values() {
         #[derive(CheckBytes, Debug)]
-        #[check_bytes(crate)]
+        #[bytecheck(crate)]
         #[repr(u8)]
         enum Test {
             A,
@@ -1403,11 +1403,11 @@ mod tests {
 
         #[allow(dead_code)]
         #[derive(CheckBytes)]
-        #[check_bytes(crate)]
+        #[bytecheck(crate)]
         #[repr(u8)]
         enum Node {
             Nil,
-            Cons(#[omit_bounds] MyBox<Node>),
+            Cons(#[bytecheck(omit_bounds)] MyBox<Node>),
         }
 
         unsafe {
@@ -1427,7 +1427,7 @@ mod tests {
         }
 
         #[derive(CheckBytes)]
-        #[check_bytes(crate = m::bc)]
+        #[bytecheck(crate = m::bc)]
         struct Test;
 
         unsafe {
@@ -1435,7 +1435,7 @@ mod tests {
         }
 
         #[derive(CheckBytes)]
-        #[check_bytes(crate = crate)]
+        #[bytecheck(crate = crate)]
         struct Test2;
 
         unsafe {
@@ -1473,8 +1473,7 @@ mod tests {
         }
 
         #[derive(CheckBytes)]
-        #[check_bytes(crate)]
-        #[check_bytes(verify)]
+        #[bytecheck(crate, verify)]
         struct UnitStruct;
 
         let mut context = FooContext { value: 0 };
@@ -1499,8 +1498,7 @@ mod tests {
         }
 
         #[derive(CheckBytes)]
-        #[check_bytes(crate)]
-        #[check_bytes(verify)]
+        #[bytecheck(crate, verify)]
         struct Struct {
             value: i32,
         }
@@ -1530,8 +1528,7 @@ mod tests {
         }
 
         #[derive(CheckBytes)]
-        #[check_bytes(crate)]
-        #[check_bytes(verify)]
+        #[bytecheck(crate, verify)]
         struct TupleStruct(i32);
 
         let mut context = FooContext { value: 0 };
@@ -1560,8 +1557,7 @@ mod tests {
         }
 
         #[derive(CheckBytes)]
-        #[check_bytes(crate)]
-        #[check_bytes(verify)]
+        #[bytecheck(crate, verify)]
         #[repr(u8)]
         enum Enum {
             A,

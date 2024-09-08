@@ -11,6 +11,7 @@
 
 mod attributes;
 mod repr;
+mod util;
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -19,7 +20,11 @@ use syn::{
     Field, Fields, Ident, Index, Path,
 };
 
-use crate::{attributes::Attributes, repr::BaseRepr};
+use crate::{
+    attributes::{Attributes, FieldAttributes},
+    repr::BaseRepr,
+    util::iter_fields,
+};
 
 /// Derives `CheckBytes` for the labeled type.
 ///
@@ -27,16 +32,18 @@ use crate::{attributes::Attributes, repr::BaseRepr};
 /// for each field type. This can cause an overflow while evaluating trait
 /// bounds if the structure eventually references its own type, as the
 /// implementation of `CheckBytes` for a struct depends on each field type
-/// implementing it as well. Adding the attribute `#[omit_bounds]` to a field
-/// will suppress this trait bound and allow recursive structures. This may be
-/// too coarse for some types, in which case additional type bounds may be
-/// required with `bounds(...)`.
+/// implementing it as well. Adding the attribute `#[check_bytes(omit_bounds)]`
+/// to a field will suppress this trait bound and allow recursive structures.
+/// This may be too coarse for some types, in which case additional type bounds
+/// may be required with `bounds(...)`.
 ///
 /// # Attributes
 ///
 /// Additional arguments can be specified using attributes.
 ///
-/// `#[check_bytes(...)]` accepts the following attributes:
+/// `#[bytecheck(...)]` accepts the following attributes:
+///
+/// ## Types only
 ///
 /// - `bounds(...)`: Adds additional bounds to the `CheckBytes` implementation.
 ///   This can be especially useful when dealing with recursive structures,
@@ -44,7 +51,14 @@ use crate::{attributes::Attributes, repr::BaseRepr};
 ///   In the context of the added bounds, `__C` is the name of the context
 ///   generic (e.g. `__C: MyContext`).
 /// - `crate = ...`: Chooses an alternative crate path to import bytecheck from.
-#[proc_macro_derive(CheckBytes, attributes(check_bytes, omit_bounds))]
+/// - `verify`: Adds an additional verification step after the validity of each
+///   field has been checked. See the `Verify` trait for more information.
+///
+/// ## Fields only
+///
+/// - `omit_bounds`: Omits trait bounds for the annotated field in the generated
+///   impl.
+#[proc_macro_derive(CheckBytes, attributes(bytecheck))]
 pub fn check_bytes_derive(
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
@@ -117,6 +131,17 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
         None
     };
 
+    let mut check_where = trait_where_clause.clone();
+    for field in iter_fields(&input.data) {
+        let field_attrs = FieldAttributes::parse(field)?;
+        if field_attrs.omit_bounds.is_none() {
+            let ty = &field.ty;
+            check_where.predicates.push(parse_quote! {
+                #ty: #crate_path::CheckBytes<__C>
+            });
+        }
+    }
+
     // Split trait generics for use later
     let (trait_impl_generics, _, trait_where_clause) =
         trait_generics.split_for_impl();
@@ -126,16 +151,6 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
     let check_bytes_impl = match input.data {
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => {
-                let mut check_where = trait_where_clause.clone();
-                for field in fields.named.iter().filter(|f| {
-                    !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds"))
-                }) {
-                    let ty = &field.ty;
-                    check_where.predicates.push(
-                        parse_quote! { #ty: #crate_path::CheckBytes<__C> },
-                    );
-                }
-
                 let field_checks = fields.named.iter().map(|f| {
                     let field = &f.ident;
                     let ty = &f.ty;
@@ -183,16 +198,6 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 }
             }
             Fields::Unnamed(ref fields) => {
-                let mut check_where = trait_where_clause.clone();
-                for field in fields.unnamed.iter().filter(|f| {
-                    !f.attrs.iter().any(|a| a.path().is_ident("omit_bounds"))
-                }) {
-                    let ty = &field.ty;
-                    check_where.predicates.push(parse_quote! {
-                        #ty: #crate_path::CheckBytes<__C>
-                    });
-                }
-
                 let field_checks =
                     fields.unnamed.iter().enumerate().map(|(i, f)| {
                         let ty = &f.ty;
@@ -290,37 +295,6 @@ fn derive_check_bytes(mut input: DeriveInput) -> Result<TokenStream, Error> {
                 }
                 Some((BaseRepr::Int(i), _)) => i,
             };
-
-            let mut check_where = trait_where_clause.clone();
-            for v in data.variants.iter() {
-                match v.fields {
-                    Fields::Named(ref fields) => {
-                        for field in fields.named.iter().filter(|f| {
-                            !f.attrs
-                                .iter()
-                                .any(|a| a.path().is_ident("omit_bounds"))
-                        }) {
-                            let ty = &field.ty;
-                            check_where.predicates.push(parse_quote! {
-                                #ty: #crate_path::CheckBytes<__C>
-                            });
-                        }
-                    }
-                    Fields::Unnamed(ref fields) => {
-                        for field in fields.unnamed.iter().filter(|f| {
-                            !f.attrs
-                                .iter()
-                                .any(|a| a.path().is_ident("omit_bounds"))
-                        }) {
-                            let ty = &field.ty;
-                            check_where.predicates.push(parse_quote! {
-                                #ty: #crate_path::CheckBytes<__C>
-                            });
-                        }
-                    }
-                    Fields::Unit => (),
-                }
-            }
 
             let tag_variant_defs = data.variants.iter().map(|v| {
                 let variant = &v.ident;

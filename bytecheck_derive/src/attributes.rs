@@ -1,7 +1,7 @@
 use quote::ToTokens;
 use syn::{
     meta::ParseNestedMeta, parenthesized, parse::Parse, parse_quote,
-    punctuated::Punctuated, AttrStyle, DeriveInput, Error, Path, Token,
+    punctuated::Punctuated, AttrStyle, DeriveInput, Error, Field, Path, Token,
     WherePredicate,
 };
 
@@ -62,7 +62,7 @@ impl Attributes {
 
             try_set_attribute(&mut self.verify, meta.path, "verify")
         } else {
-            Err(meta.error("unrecognized check_bytes argument"))
+            Err(meta.error("unrecognized bytecheck argument"))
         }
     }
 
@@ -74,7 +74,7 @@ impl Attributes {
                 continue;
             }
 
-            if attr.path().is_ident("check_bytes") {
+            if attr.path().is_ident("bytecheck") {
                 attr.parse_nested_meta(|nested| {
                     result.parse_check_bytes_attributes(nested)
                 })?;
@@ -92,5 +92,33 @@ impl Attributes {
         self.crate_path
             .clone()
             .unwrap_or_else(|| parse_quote! { ::bytecheck })
+    }
+}
+
+#[derive(Default)]
+pub struct FieldAttributes {
+    pub omit_bounds: Option<Path>,
+}
+
+impl FieldAttributes {
+    fn parse_meta(&mut self, meta: ParseNestedMeta<'_>) -> Result<(), Error> {
+        if meta.path.is_ident("omit_bounds") {
+            self.omit_bounds = Some(meta.path);
+            Ok(())
+        } else {
+            Err(meta.error("unrecognized bytecheck arguments"))
+        }
+    }
+
+    pub fn parse(input: &Field) -> Result<Self, Error> {
+        let mut result = Self::default();
+
+        for attr in input.attrs.iter() {
+            if attr.path().is_ident("bytecheck") {
+                attr.parse_nested_meta(|meta| result.parse_meta(meta))?;
+            }
+        }
+
+        Ok(result)
     }
 }
