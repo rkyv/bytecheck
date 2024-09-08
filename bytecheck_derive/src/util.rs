@@ -1,7 +1,8 @@
 use core::iter::FlatMap;
 
 use syn::{
-    punctuated::Iter, Data, DataEnum, DataStruct, DataUnion, Field, Variant,
+    punctuated::Iter, Data, DataEnum, DataStruct, DataUnion, Field, Ident,
+    Variant,
 };
 
 type VariantFieldsFn = fn(&Variant) -> Iter<'_, Field>;
@@ -38,4 +39,12 @@ pub fn iter_fields(data: &Data) -> FieldsIter<'_> {
             FieldsIter::Struct(fields.named.iter())
         }
     }
+}
+
+pub fn strip_raw(ident: &Ident) -> String {
+    let as_string = ident.to_string();
+    as_string
+        .strip_prefix("r#")
+        .map(ToString::to_string)
+        .unwrap_or(as_string)
 }
