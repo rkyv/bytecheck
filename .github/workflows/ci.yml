@@ -22,7 +22,7 @@ jobs:
       matrix:
         external:
           - ''
-          - simdutf8 uuid
+          - simdutf8 uuid-1
 
     steps:
       - uses: actions/checkout@v4

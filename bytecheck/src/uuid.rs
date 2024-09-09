@@ -1,4 +1,4 @@
-use uuid::Uuid;
+use uuid_1::Uuid;
 
 use crate::{rancor::Fallible, CheckBytes};
 
@@ -13,7 +13,7 @@ unsafe impl<C: Fallible + ?Sized> CheckBytes<C> for Uuid {
 
 #[cfg(test)]
 mod tests {
-    use uuid::Uuid;
+    use uuid_1::Uuid;
 
     use crate::{check_bytes, rancor::Infallible};
 

@@ -26,7 +26,7 @@ simdutf8 = { workspace = true, optional = true }
 # time. Before adding support for another crate, please consider getting
 # bytecheck support in the crate instead.
 
-uuid = { workspace = true, optional = true }
+uuid-1 = { package = "uuid", version = "1", optional = true, default-features = false }
 
 [features]
 default = ["simdutf8"]

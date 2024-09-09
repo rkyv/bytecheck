@@ -40,7 +40,7 @@
 //! Bytecheck provides integrations for some common crates by default. In the
 //! future, crates should depend on bytecheck and provide their own integration.
 //!
-//! - [`uuid`](https://docs.rs/uuid)
+//! - [`uuid-1`](https://docs.rs/uuid/1)
 //!
 //! ## Example
 #![doc = include_str!("../example.md")]
@@ -68,7 +68,7 @@
 // over time. Before adding support for another crate, please consider getting
 // bytecheck support in the crate instead.
 
-#[cfg(feature = "uuid")]
+#[cfg(feature = "uuid-1")]
 mod uuid;
 
 #[cfg(not(feature = "simdutf8"))]
