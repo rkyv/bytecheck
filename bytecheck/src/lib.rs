@@ -749,7 +749,14 @@ where
         // the same layout as a `str`, we can dereference it for UTF-8
         // validation.
         let slice = unsafe { &*slice_ptr };
-        from_utf8(slice).map_err(|_| Utf8Error).into_error()?;
+
+        // Checking whether a byte slice is ASCII is much faster than checking
+        // whether it is valid UTF-8. Falling back to a full UTF-8 check
+        // afterward nets a performance improvement for the average case.
+        if !slice.is_ascii() {
+            from_utf8(slice).map_err(|_| Utf8Error).into_error()?;
+        }
+
         Ok(())
     }
 }
