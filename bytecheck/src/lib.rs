@@ -58,7 +58,7 @@
     rustdoc::missing_crate_level_docs
 )]
 #![no_std]
-#![cfg_attr(all(docsrs, not(doctest)), feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(all(docsrs, not(doctest)), feature(doc_cfg))]
 
 // Support for various common crates. These are primarily to get users off the
 // ground and build some momentum.
