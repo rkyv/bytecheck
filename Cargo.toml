@@ -6,7 +6,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.8.1"
+version = "0.8.2"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2021"
 rust-version = "1.81"
@@ -18,7 +18,7 @@ categories = ["encoding", "no-std", "no-std::no-alloc"]
 
 [workspace.dependencies]
 bytecheck = { version = "0.8", path = "bytecheck", default-features = false }
-bytecheck_derive = { version = "=0.8.1", path = "bytecheck_derive", default-features = false }
+bytecheck_derive = { version = "=0.8.2", path = "bytecheck_derive", default-features = false }
 proc-macro2 = { version = "1", default-features = false }
 ptr_meta = { version = "0.3", default-features = false }
 rancor = { version = "0.1", default-features = false }
