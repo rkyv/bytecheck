@@ -81,6 +81,8 @@ use core::sync::atomic::{AtomicI16, AtomicU16};
 use core::sync::atomic::{AtomicI32, AtomicU32};
 #[cfg(target_has_atomic = "64")]
 use core::sync::atomic::{AtomicI64, AtomicU64};
+#[cfg(target_has_atomic = "ptr")]
+use core::sync::atomic::{AtomicIsize, AtomicUsize};
 use core::{
     cell::{Cell, UnsafeCell},
     error::Error,
@@ -91,6 +93,7 @@ use core::{
     num::{
         NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8,
         NonZeroU128, NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8,
+        NonZeroIsize, NonZeroUsize,
     },
     ops, ptr,
 };
@@ -374,7 +377,7 @@ impl_primitives! {
     (),
     i8, i16, i32, i64, i128,
     u8, u16, u32, u64, u128,
-    f32, f64,
+    f32, f64, isize, usize,
 }
 #[cfg(target_has_atomic = "8")]
 impl_primitives!(AtomicI8, AtomicU8);
@@ -384,6 +387,8 @@ impl_primitives!(AtomicI16, AtomicU16);
 impl_primitives!(AtomicI32, AtomicU32);
 #[cfg(target_has_atomic = "64")]
 impl_primitives!(AtomicI64, AtomicU64);
+#[cfg(target_has_atomic = "ptr")]
+impl_primitives!(AtomicIsize, AtomicUsize);
 
 // SAFETY: `PhantomData` is a zero-sized type and so all bit patterns are valid.
 unsafe impl<T: ?Sized, C: Fallible + ?Sized> CheckBytes<C> for PhantomData<T> {
@@ -1086,11 +1091,13 @@ impl_nonzero!(NonZeroI16, i16);
 impl_nonzero!(NonZeroI32, i32);
 impl_nonzero!(NonZeroI64, i64);
 impl_nonzero!(NonZeroI128, i128);
+impl_nonzero!(NonZeroIsize, isize);
 impl_nonzero!(NonZeroU8, u8);
 impl_nonzero!(NonZeroU16, u16);
 impl_nonzero!(NonZeroU32, u32);
 impl_nonzero!(NonZeroU64, u64);
 impl_nonzero!(NonZeroU128, u128);
+impl_nonzero!(NonZeroUsize, usize);
 
 #[cfg(test)]
 #[macro_use]
